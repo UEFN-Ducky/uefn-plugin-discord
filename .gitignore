@@ -1,0 +1,9 @@
+deploy/
+*.ducky-plugin.zip
+__pycache__/
+.pytest_cache/
+.env
+.env.*
+
+# Agent / local scratch dirs (never commit)
+.tmp-*

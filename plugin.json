@@ -1,0 +1,157 @@
+{
+  "id": "discord",
+  "kind": "plugin",
+  "version": "1.0.15",
+  "label": "Discord",
+  "description": "Discord bot chat, !ducky commands, and agent server-admin tools in UEFN Ducky",
+  "min_app_version": "1.0.0",
+  "default_enabled": true,
+  "secret_keys": [
+    "discord",
+    "discord_guild",
+    "discord_name",
+    "discord_allowed_ids",
+    "discord_channel"
+  ],
+  "contributes": {
+    "settings.tabs": [
+      {
+        "id": "Discord",
+        "label": "Discord",
+        "icon": "assets/icon.png",
+        "ui": "builtin:discord-settings"
+      }
+    ],
+    "walkthrough": {
+      "id": "discord",
+      "title": "Discord Ducky setup",
+      "auto_start": "first_enable",
+      "settings_tab": "Discord",
+      "steps": [
+        {
+          "target": "settings.tab.discord",
+          "title": "Discord settings",
+          "body": "Bot token, server ID, and where Discord Ducky appears are configured here. Press Discord to open the tab.",
+          "advance": "require_click",
+          "mode": "rect"
+        },
+        {
+          "target": "settings.discord.connection",
+          "title": "Connection",
+          "body": "Paste your bot token and guild ID. Placement toggles above control the header button and dock panels.",
+          "advance": "next",
+          "mode": "rect"
+        },
+        {
+          "target": "settings.discord.root",
+          "title": "Using Discord Ducky",
+          "body": "Open Discord Ducky from the header button or left dock to chat, run !ducky commands, and manage the server.",
+          "advance": "next",
+          "mode": "rect"
+        }
+      ]
+    },
+    "settings.sections": [
+      {
+        "tab": "Discord",
+        "id": "placement",
+        "title": "Placement",
+        "description": "Choose where Discord Ducky appears. The header button always opens or focuses the Discord tab, even when the dock panel is hidden.",
+        "order": 10,
+        "properties": [
+          {
+            "id": "showInHeader",
+            "type": "boolean",
+            "default": false,
+            "label": "Show in header",
+            "description": "Button to the right of the right-sidebar toggle opens Discord Ducky as a tab."
+          },
+          {
+            "id": "showInLeftSidebar",
+            "type": "boolean",
+            "default": false,
+            "label": "Show in left sidebar",
+            "description": "Show the Discord Ducky dock panel when it is docked on the left."
+          },
+          {
+            "id": "showInRightSidebar",
+            "type": "boolean",
+            "default": false,
+            "label": "Show in right sidebar",
+            "description": "Show the Discord Ducky dock panel when it is docked on the right."
+          }
+        ]
+      }
+    ],
+    "dock.panels": [
+      {
+        "id": "groupchat",
+        "title": "Discord Ducky",
+        "defaultSide": "left",
+        "ui": "builtin:discord-groupchat"
+      }
+    ],
+    "editor.kinds": [
+      {
+        "kind": "discord",
+        "title": "Discord",
+        "ui": "builtin:discord-groupchat"
+      }
+    ],
+    "header.buttons": [
+      {
+        "id": "discord",
+        "title": "Discord Ducky",
+        "icon": "assets/icon.png",
+        "action": "builtin:open-discord",
+        "order": 10
+      }
+    ],
+    "agent.tools": {
+      "category": "discord",
+      "tools": [
+        "discord_list_bots",
+        "discord_list_channels",
+        "discord_read_channel",
+        "discord_send_message",
+        "discord_create_channel",
+        "discord_edit_channel",
+        "discord_delete_channel",
+        "discord_set_channel_permissions",
+        "discord_list_roles",
+        "discord_create_role",
+        "discord_edit_role",
+        "discord_delete_role",
+        "discord_list_members",
+        "discord_set_member_roles",
+        "discord_set_nickname",
+        "discord_timeout_member",
+        "discord_kick_member",
+        "discord_ban_member",
+        "discord_edit_message",
+        "discord_delete_message",
+        "discord_create_invite"
+      ],
+      "intent_pattern": "\\b(discord(\\s+bot)?|ducky\\s*bob|bob\\s*bob|bots?|group\\s*chat|the\\s+server\\s+chat|community\\s+chat|server\\s+(admin|manage|setup)|channels?|roles?|permissions?)\\b",
+      "plan_tools": [
+        "discord_list_bots",
+        "discord_list_channels",
+        "discord_read_channel",
+        "discord_list_roles",
+        "discord_list_members"
+      ],
+      "destructive_tools": [
+        "discord_delete_channel",
+        "discord_delete_role",
+        "discord_kick_member",
+        "discord_ban_member",
+        "discord_delete_message",
+        "discord_timeout_member"
+      ]
+    }
+  },
+  "backend": {
+    "entry": "backend",
+    "register": "register"
+  }
+}
