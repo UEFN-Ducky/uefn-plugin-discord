@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Discord Ducky</title>
+<style>
+  :root {
+    --bg: #313338;
+    --sidebar: #2b2d31;
+    --panel: #1e1f22;
+    --border: rgba(0,0,0,0.3);
+    --text: #dbdee1;
+    --dim: #949ba4;
+    --accent: #5865f2;
+    --input: #383a40;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 13px/1.4 "Segoe UI", system-ui, sans-serif; overflow: hidden; }
+  #app { display: grid; grid-template-columns: 200px 1fr 180px; height: 100%; }
+  aside { background: var(--sidebar); border-right: 1px solid var(--border); overflow: auto; padding: 8px; }
+  #members { border-right: none; border-left: 1px solid var(--border); }
+  .col-title { font-size: 11px; text-transform: uppercase; color: var(--dim); margin: 8px 4px; letter-spacing: 0.04em; }
+  .item {
+    display: block; width: 100%; text-align: left; border: none; background: transparent;
+    color: var(--dim); padding: 6px 8px; border-radius: 6px; cursor: pointer; font: inherit;
+  }
+  .item:hover, .item.active { background: rgba(255,255,255,0.06); color: var(--text); }
+  main { display: flex; flex-direction: column; min-width: 0; }
+  #toolbar {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+    border-bottom: 1px solid var(--border); background: var(--bg); flex: 0 0 auto;
+  }
+  #toolbar select {
+    background: var(--input); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 8px; font: inherit; max-width: 160px;
+  }
+  #channel-title { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #msgs { flex: 1; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { display: grid; gap: 2px; }
+  .msg .who { font-size: 12px; font-weight: 600; }
+  .msg .when { color: var(--dim); font-weight: 400; margin-left: 8px; font-size: 11px; }
+  .msg .body { white-space: pre-wrap; word-break: break-word; }
+  #composer {
+    display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); background: var(--bg);
+  }
+  #composer input {
+    flex: 1; border: none; border-radius: 8px; background: var(--input); color: var(--text);
+    padding: 10px 12px; font: inherit;
+  }
+  #composer button {
+    border: none; border-radius: 8px; background: var(--accent); color: #fff;
+    padding: 0 14px; cursor: pointer; font: inherit; font-weight: 600;
+  }
+  .empty, .err { color: var(--dim); padding: 24px; text-align: center; }
+  .err { color: #ffb4b4; }
+  @media (max-width: 720px) {
+    #app { grid-template-columns: 140px 1fr; }
+    #members { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="channels">
+    <div class="col-title">Channels</div>
+    <div id="channel-list"></div>
+  </aside>
+  <main>
+    <div id="toolbar">
+      <select id="bot-select" title="Bot"></select>
+      <div id="channel-title"># select a channel</div>
+    </div>
+    <div id="msgs"><div class="empty">Select a bot and channel to chat.</div></div>
+    <form id="composer">
+      <input id="text" placeholder="Message…" autocomplete="off" />
+      <button type="submit">Send</button>
+    </form>
+  </main>
+  <aside id="members">
+    <div class="col-title">Members</div>
+    <div id="member-list"></div>
+  </aside>
+</div>
+<script>
+(function () {
+  var CHANNEL = "uefn-plugin-ui";
+  function call(method, params) {
+    var id = crypto.randomUUID();
+    return new Promise(function (resolve, reject) {
+      function onMsg(ev) {
+        var d = ev.data;
+        if (!d || d.channel !== CHANNEL || d.id !== id) return;
+        window.removeEventListener("message", onMsg);
+        if (d.ok) resolve(d.result);
+        else reject(new Error(d.error || "bridge error"));
+      }
+      window.addEventListener("message", onMsg);
+      parent.postMessage({ channel: CHANNEL, id: id, method: method, params: params || {} }, "*");
+    });
+  }
+  function rpc(method, params) {
+    return call("plugin.call", { method: method, params: params || {} });
+  }
+
+  var botId = "";
+  var channelId = "";
+  var channelName = "";
+
+  var botSelect = document.getElementById("bot-select");
+  var channelList = document.getElementById("channel-list");
+  var memberList = document.getElementById("member-list");
+  var msgs = document.getElementById("msgs");
+  var title = document.getElementById("channel-title");
+
+  function escapeHtml(s) {
+    return String(s || "").replace(/[&<>"']/g, function (c) {
+      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c];
+    });
+  }
+
+  function appendMessage(m, scroll) {
+    if (msgs.querySelector(".empty, .err")) msgs.innerHTML = "";
+    var el = document.createElement("div");
+    el.className = "msg";
+    el.dataset.id = m.id || "";
+    var author = (m.author && (m.author.global_name || m.author.username)) || m.author_name || "unknown";
+    var when = m.timestamp ? new Date(m.timestamp).toLocaleTimeString() : "";
+    el.innerHTML =
+      '<div class="who">' + escapeHtml(author) +
+      '<span class="when">' + escapeHtml(when) + "</span></div>" +
+      '<div class="body">' + escapeHtml(m.content || "") + "</div>";
+    msgs.appendChild(el);
+    if (scroll !== false) msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function loadBots() {
+    return rpc("list_bots").then(function (res) {
+      var bots = (res && res.bots) || [];
+      botSelect.innerHTML = "";
+      if (!bots.length) {
+        botSelect.innerHTML = '<option value="">No bots</option>';
+        return;
+      }
+      bots.forEach(function (b) {
+        var opt = document.createElement("option");
+        opt.value = b.id;
+        opt.textContent = b.label || b.id;
+        botSelect.appendChild(opt);
+      });
+      if (!botId || !bots.some(function (b) { return b.id === botId; })) {
+        botId = bots[0].id;
+      }
+      botSelect.value = botId;
+      return loadChannels();
+    });
+  }
+
+  function loadChannels() {
+    channelList.innerHTML = '<div class="empty">Loading…</div>';
+    return rpc("list_channels", { bot_id: botId }).then(function (res) {
+      channelList.innerHTML = "";
+      if (!res || res.ok === false) {
+        channelList.innerHTML = '<div class="err">' + escapeHtml((res && res.error) || "Failed") + "</div>";
+        return;
+      }
+      var channels = res.channels || [];
+      if (!channels.length) {
+        channelList.innerHTML = '<div class="empty">No text channels</div>';
+        return;
+      }
+      channels.forEach(function (ch) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "item" + (ch.id === channelId ? " active" : "");
+        btn.textContent = "#" + (ch.name || ch.id);
+        btn.onclick = function () { openChannel(ch.id, ch.name); };
+        channelList.appendChild(btn);
+      });
+      rpc("status", { bot_id: botId }).then(function (st) {
+        /* warm poller */
+      }).catch(function () {});
+      loadMembers();
+    });
+  }
+
+  function openChannel(id, name) {
+    channelId = id;
+    channelName = name || id;
+    title.textContent = "#" + channelName;
+    Array.prototype.forEach.call(channelList.querySelectorAll(".item"), function (el) {
+      el.classList.toggle("active", el.textContent === "#" + channelName);
+    });
+    msgs.innerHTML = '<div class="empty">Loading…</div>';
+    rpc("open_channel", { channel_id: id, bot_id: botId }).then(function (res) {
+      msgs.innerHTML = "";
+      if (!res || res.ok === false) {
+        msgs.innerHTML = '<div class="err">' + escapeHtml((res && res.error) || "Failed") + "</div>";
+        return;
+      }
+      (res.messages || []).forEach(function (m) { appendMessage(m, false); });
+      msgs.scrollTop = msgs.scrollHeight;
+      if (!msgs.children.length) msgs.innerHTML = '<div class="empty">No messages yet.</div>';
+    }).catch(function (e) {
+      msgs.innerHTML = '<div class="err">' + escapeHtml(e.message || e) + "</div>";
+    });
+  }
+
+  function loadMembers() {
+    memberList.innerHTML = '<div class="empty">Loading…</div>';
+    rpc("list_members", { bot_id: botId }).then(function (res) {
+      memberList.innerHTML = "";
+      if (!res || res.ok === false) {
+        memberList.innerHTML = '<div class="err">' + escapeHtml((res && res.error) || "—") + "</div>";
+        return;
+      }
+      var groups = res.groups || [];
+      if (!groups.length) {
+        memberList.innerHTML = '<div class="empty">' + escapeHtml(res.error || "No members") + "</div>";
+        return;
+      }
+      groups.forEach(function (g) {
+        var t = document.createElement("div");
+        t.className = "col-title";
+        t.textContent = (g.name || "Members") + " — " + (g.count || (g.members || []).length);
+        memberList.appendChild(t);
+        (g.members || []).forEach(function (m) {
+          var el = document.createElement("div");
+          el.className = "item";
+          el.textContent = m.name || m.id;
+          memberList.appendChild(el);
+        });
+      });
+    }).catch(function (e) {
+      memberList.innerHTML = '<div class="err">' + escapeHtml(e.message || e) + "</div>";
+    });
+  }
+
+  botSelect.onchange = function () {
+    botId = botSelect.value;
+    channelId = "";
+    loadChannels();
+  };
+
+  document.getElementById("composer").onsubmit = function (ev) {
+    ev.preventDefault();
+    var input = document.getElementById("text");
+    var text = input.value.trim();
+    if (!text || !channelId) return;
+    input.value = "";
+    rpc("send", { channel_id: channelId, text: text, bot_id: botId }).then(function (res) {
+      if (res && res.ok && res.message) appendMessage(res.message, true);
+      else if (res && res.error) {
+        var err = document.createElement("div");
+        err.className = "err";
+        err.textContent = res.error;
+        msgs.appendChild(err);
+      }
+    }).catch(function (e) {
+      var err = document.createElement("div");
+      err.className = "err";
+      err.textContent = String(e.message || e);
+      msgs.appendChild(err);
+    });
+  };
+
+  call("plugin.subscribe", { types: ["discord_message", "discord_changed"] });
+  window.addEventListener("message", function (ev) {
+    var d = ev.data;
+    if (!d || d.channel !== CHANNEL || !d.event) return;
+    if (d.event.type === "discord_changed") {
+      loadBots();
+      return;
+    }
+    if (d.event.type === "discord_message") {
+      var msg = d.event.discord || d.event.message || null;
+      var cid = String(d.event.channel_id || (msg && msg.channel_id) || "");
+      if (msg && cid === channelId) appendMessage(msg, true);
+    }
+  });
+
+  loadBots();
+})();
+</script>
+</body>
+</html>

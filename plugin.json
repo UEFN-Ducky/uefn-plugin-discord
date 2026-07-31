@@ -1,7 +1,7 @@
 {
   "id": "discord",
   "kind": "plugin",
-  "version": "1.0.15",
+  "version": "1.1.0",
   "label": "Discord",
   "description": "Discord bot chat, !ducky commands, and agent server-admin tools in UEFN Ducky",
   "min_app_version": "1.0.0",
@@ -14,12 +14,26 @@
     "discord_channel"
   ],
   "contributes": {
+    "ui.panels": [
+      {
+        "id": "discord-settings",
+        "title": "Discord settings",
+        "icon": "assets/icon.png",
+        "entry": "ui/settings.html"
+      },
+      {
+        "id": "discord-chat",
+        "title": "Discord Ducky",
+        "icon": "assets/icon.png",
+        "entry": "ui/chat.html"
+      }
+    ],
     "settings.tabs": [
       {
         "id": "Discord",
         "label": "Discord",
         "icon": "assets/icon.png",
-        "ui": "builtin:discord-settings"
+        "ui": "panel:discord-settings"
       }
     ],
     "walkthrough": {
@@ -36,14 +50,14 @@
           "mode": "rect"
         },
         {
-          "target": "settings.discord.connection",
+          "target": "settings.content",
           "title": "Connection",
-          "body": "Paste your bot token and guild ID. Placement toggles above control the header button and dock panels.",
+          "body": "Add a bot, paste your token and guild ID. Placement toggles above control the header button and dock panels.",
           "advance": "next",
           "mode": "rect"
         },
         {
-          "target": "settings.discord.root",
+          "target": "settings.content",
           "title": "Using Discord Ducky",
           "body": "Open Discord Ducky from the header button or left dock to chat, run !ducky commands, and manage the server.",
           "advance": "next",
@@ -88,14 +102,7 @@
         "id": "groupchat",
         "title": "Discord Ducky",
         "defaultSide": "left",
-        "ui": "builtin:discord-groupchat"
-      }
-    ],
-    "editor.kinds": [
-      {
-        "kind": "discord",
-        "title": "Discord",
-        "ui": "builtin:discord-groupchat"
+        "ui": "panel:discord-chat"
       }
     ],
     "header.buttons": [
@@ -103,35 +110,12 @@
         "id": "discord",
         "title": "Discord Ducky",
         "icon": "assets/icon.png",
-        "action": "builtin:open-discord",
+        "action": "panel:discord-chat",
         "order": 10
       }
     ],
     "agent.tools": {
       "category": "discord",
-      "tools": [
-        "discord_list_bots",
-        "discord_list_channels",
-        "discord_read_channel",
-        "discord_send_message",
-        "discord_create_channel",
-        "discord_edit_channel",
-        "discord_delete_channel",
-        "discord_set_channel_permissions",
-        "discord_list_roles",
-        "discord_create_role",
-        "discord_edit_role",
-        "discord_delete_role",
-        "discord_list_members",
-        "discord_set_member_roles",
-        "discord_set_nickname",
-        "discord_timeout_member",
-        "discord_kick_member",
-        "discord_ban_member",
-        "discord_edit_message",
-        "discord_delete_message",
-        "discord_create_invite"
-      ],
       "intent_pattern": "\\b(discord(\\s+bot)?|ducky\\s*bob|bob\\s*bob|bots?|group\\s*chat|the\\s+server\\s+chat|community\\s+chat|server\\s+(admin|manage|setup)|channels?|roles?|permissions?)\\b",
       "plan_tools": [
         "discord_list_bots",

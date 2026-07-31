@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Discord settings</title>
+<style>
+  :root {
+    --bg: #121214;
+    --panel: #1a1a1e;
+    --border: rgba(255,255,255,0.08);
+    --text: #e6e6ea;
+    --dim: #9a9aa2;
+    --accent: #5865f2;
+    --danger: #ed4245;
+    --ok: #57f287;
+    --input: rgba(255,255,255,0.06);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 13px/1.45 "Segoe UI", system-ui, sans-serif; }
+  #app { display: flex; flex-direction: column; height: 100%; padding: 12px; gap: 12px; }
+  h1 { margin: 0; font-size: 16px; font-weight: 600; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  button, .btn {
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    border-radius: 8px; padding: 6px 12px; cursor: pointer; font: inherit;
+  }
+  button:hover { border-color: rgba(255,255,255,0.2); }
+  button.primary { background: var(--accent); border-color: transparent; color: #fff; }
+  button.danger { background: transparent; border-color: var(--danger); color: #ffb4b4; }
+  .list { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px; display: grid; gap: 8px;
+  }
+  .card h2 { margin: 0; font-size: 14px; }
+  .meta { color: var(--dim); font-size: 12px; }
+  label { display: grid; gap: 4px; font-size: 12px; color: var(--dim); }
+  input, select {
+    width: 100%; border: 1px solid var(--border); background: var(--input); color: var(--text);
+    border-radius: 8px; padding: 7px 10px; font: inherit;
+  }
+  .status { font-size: 12px; color: var(--dim); min-height: 1.2em; }
+  .status.ok { color: var(--ok); }
+  .status.err { color: #ffb4b4; }
+  .form { display: none; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .form.open { display: grid; }
+  .form .full { grid-column: 1 / -1; }
+  .check { display: flex; align-items: center; gap: 8px; color: var(--text); }
+  .check input { width: auto; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="row">
+    <h1>Discord bots</h1>
+    <button type="button" class="primary" id="btn-new">Add bot</button>
+    <button type="button" id="btn-refresh">Refresh</button>
+  </div>
+  <div class="status" id="status"></div>
+  <div class="list" id="list"></div>
+  <div class="card form" id="form">
+    <label class="full">Label <input id="f-label" placeholder="My bot" /></label>
+    <label>Bot token <input id="f-token" type="password" placeholder="leave blank to keep" autocomplete="off" /></label>
+    <label>Guild / server ID <input id="f-guild" placeholder="numeric id" /></label>
+    <label>Command prefix <input id="f-prefix" placeholder="!ducky" /></label>
+    <label>Post as (optional) <input id="f-postas" placeholder="display name prefix" /></label>
+    <label class="full">Allowed Discord user IDs (comma-separated)
+      <input id="f-allowed" placeholder="blank = anyone" />
+    </label>
+    <label class="check full"><input type="checkbox" id="f-enabled" checked /> Enabled</label>
+    <label class="check full"><input type="checkbox" id="f-offline" /> Show offline (invisible presence)</label>
+    <div class="row full">
+      <button type="button" class="primary" id="btn-save">Save</button>
+      <button type="button" id="btn-portal">Open Dev Portal</button>
+      <button type="button" class="danger" id="btn-delete">Delete</button>
+      <button type="button" id="btn-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  const CHANNEL = "uefn-plugin-ui";
+  function call(method, params) {
+    const id = crypto.randomUUID();
+    return new Promise(function (resolve, reject) {
+      function onMsg(ev) {
+        var d = ev.data;
+        if (!d || d.channel !== CHANNEL || d.id !== id) return;
+        window.removeEventListener("message", onMsg);
+        if (d.ok) resolve(d.result);
+        else reject(new Error(d.error || "bridge error"));
+      }
+      window.addEventListener("message", onMsg);
+      parent.postMessage({ channel: CHANNEL, id: id, method: method, params: params || {} }, "*");
+    });
+  }
+  function rpc(method, params) {
+    return call("plugin.call", { method: method, params: params || {} });
+  }
+
+  var editingId = null;
+  var statusEl = document.getElementById("status");
+  var listEl = document.getElementById("list");
+  var formEl = document.getElementById("form");
+
+  function setStatus(msg, kind) {
+    statusEl.textContent = msg || "";
+    statusEl.className = "status" + (kind ? " " + kind : "");
+  }
+
+  function openForm(bot) {
+    editingId = bot && bot.id ? bot.id : null;
+    document.getElementById("f-label").value = (bot && bot.label) || "";
+    document.getElementById("f-token").value = "";
+    document.getElementById("f-guild").value = (bot && bot.guild_id) || "";
+    document.getElementById("f-prefix").value = (bot && bot.prefix) || "!ducky";
+    document.getElementById("f-postas").value = (bot && bot.post_as) || "";
+    document.getElementById("f-allowed").value = (bot && bot.allowed_ids) || "";
+    document.getElementById("f-enabled").checked = !bot || bot.enabled !== false;
+    document.getElementById("f-offline").checked = !!(bot && bot.show_offline);
+    formEl.classList.add("open");
+  }
+
+  function closeForm() {
+    editingId = null;
+    formEl.classList.remove("open");
+  }
+
+  function renderBots(bots) {
+    listEl.innerHTML = "";
+    if (!bots || !bots.length) {
+      listEl.innerHTML = '<div class="meta">No bots yet. Click Add bot.</div>';
+      return;
+    }
+    bots.forEach(function (b) {
+      var card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML =
+        "<h2>" + escapeHtml(b.label || b.id) + "</h2>" +
+        '<div class="meta">id=' + escapeHtml(b.id) +
+        " · guild=" + escapeHtml(b.guild_id || "—") +
+        " · prefix=" + escapeHtml(b.prefix || "") +
+        (b.enabled === false ? " · disabled" : " · enabled") +
+        (b.has_token ? " · token set" : " · no token") +
+        "</div>" +
+        '<div class="row"><button type="button" data-edit>Edit</button>' +
+        '<button type="button" data-status>Test connection</button></div>';
+      card.querySelector("[data-edit]").onclick = function () { openForm(b); };
+      card.querySelector("[data-status]").onclick = function () {
+        setStatus("Checking…");
+        rpc("status", { bot_id: b.id }).then(function (st) {
+          if (st && st.ok) setStatus("Connected as " + (st.bot_name || "bot"), "ok");
+          else setStatus((st && st.error) || "Not connected", "err");
+        }).catch(function (e) { setStatus(String(e.message || e), "err"); });
+      };
+      listEl.appendChild(card);
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s || "").replace(/[&<>"']/g, function (c) {
+      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c];
+    });
+  }
+
+  function refresh() {
+    setStatus("Loading…");
+    return rpc("list_bots").then(function (res) {
+      if (!res || res.ok === false) {
+        setStatus((res && res.error) || "Failed to list bots", "err");
+        renderBots([]);
+        return;
+      }
+      setStatus("");
+      renderBots(res.bots || []);
+    }).catch(function (e) {
+      setStatus(String(e.message || e), "err");
+    });
+  }
+
+  document.getElementById("btn-new").onclick = function () { openForm(null); };
+  document.getElementById("btn-refresh").onclick = refresh;
+  document.getElementById("btn-cancel").onclick = closeForm;
+  document.getElementById("btn-portal").onclick = function () {
+    rpc("open_portal", { bot_id: editingId || "" }).catch(function (e) {
+      setStatus(String(e.message || e), "err");
+    });
+  };
+  document.getElementById("btn-delete").onclick = function () {
+    if (!editingId) { closeForm(); return; }
+    if (!confirm("Delete bot " + editingId + "?")) return;
+    rpc("delete_bot", { bot_id: editingId }).then(function () {
+      closeForm();
+      return refresh();
+    }).catch(function (e) { setStatus(String(e.message || e), "err"); });
+  };
+  document.getElementById("btn-save").onclick = function () {
+    var patch = {
+      create: !editingId,
+      id: editingId || undefined,
+      label: document.getElementById("f-label").value.trim(),
+      guild_id: document.getElementById("f-guild").value.trim(),
+      prefix: document.getElementById("f-prefix").value.trim(),
+      post_as: document.getElementById("f-postas").value.trim(),
+      allowed_ids: document.getElementById("f-allowed").value.trim(),
+      enabled: document.getElementById("f-enabled").checked,
+      show_offline: document.getElementById("f-offline").checked,
+    };
+    var tok = document.getElementById("f-token").value.trim();
+    if (tok) patch.token = tok;
+    setStatus("Saving…");
+    rpc("save_bot", { patch: patch }).then(function (res) {
+      if (!res || res.ok === false) {
+        setStatus((res && res.error) || "Save failed", "err");
+        return;
+      }
+      setStatus("Saved", "ok");
+      closeForm();
+      return refresh();
+    }).catch(function (e) { setStatus(String(e.message || e), "err"); });
+  };
+
+  call("plugin.subscribe", { types: ["discord_changed"] });
+  window.addEventListener("message", function (ev) {
+    var d = ev.data;
+    if (d && d.channel === CHANNEL && d.event && d.event.type === "discord_changed") refresh();
+  });
+  refresh();
+})();
+</script>
+</body>
+</html>
