@@ -1,15 +1,11 @@
-"""Discord Gateway: bot Online + guild member/presence cache for the sidebar.
+"""Discord Gateway — real bot session (no REST command poller).
 
-REST still owns guild channel messages (poller). This websocket:
-  1. Keeps the bot green (IDENTIFY presence) — or stays disconnected when
-     ``show_offline`` is on (invisible-while-connected is flaky for bots).
-  2. With GUILDS | GUILD_MEMBERS | GUILD_PRESENCES, caches roles + members +
-     status so the panel can render Discord's member list (hoisted roles,
-     Offline accordion).
-  3. With DIRECT_MESSAGES, handles DM ``MESSAGE_CREATE`` so ``!bob`` whispers
-     work (content hydrated via REST).
+This websocket is the bot:
+  1. Online presence (or disconnected when ``show_offline``).
+  2. ``MESSAGE_CREATE`` for guild + DM → ``!bob`` / ``!ducky`` (content via REST).
+  3. Optional member sidebar cache (Members + Presence intents).
 
-Requires Server Members Intent + Presence Intent ON in the Dev Portal.
+Panel history uses one-shot REST; live commands never poll.
 
 Stdlib only (ssl + socket). Client frames are masked (RFC 6455).
 """
@@ -33,14 +29,14 @@ _GATEWAY_HOST = "gateway.discord.gg"
 _RECONNECT_MIN_S = 5.0
 _RECONNECT_MAX_S = 120.0
 
-# GUILDS alone is enough to hold an IDENTIFY session and show the bot Online.
-# DIRECT_MESSAGES lets DM !commands reach us; privileged intents power the
-# member sidebar. Discord closes with 4014 if privileged intents are requested
-# without Dev Portal toggles — fall back: FULL → MEMBERS → BASIC.
-_INTENTS_DM = 1 << 12  # DIRECT_MESSAGES (not privileged)
-_INTENTS_BASIC = (1 << 0) | _INTENTS_DM  # GUILDS | DMs
-_INTENTS_MEMBERS = (1 << 0) | (1 << 1) | _INTENTS_DM  # + GUILD_MEMBERS
-_INTENTS_FULL = (1 << 0) | (1 << 1) | (1 << 8) | _INTENTS_DM  # + PRESENCES
+# Real-bot intents: GUILD_MESSAGES + DIRECT_MESSAGES always (commands).
+# Privileged Members/Presences power the sidebar; 4014 → demote FULL→MEMBERS→BASIC.
+_INTENTS_GUILD_MESSAGES = 1 << 9
+_INTENTS_DM = 1 << 12
+_INTENTS_MSG = _INTENTS_GUILD_MESSAGES | _INTENTS_DM
+_INTENTS_BASIC = (1 << 0) | _INTENTS_MSG  # GUILDS + messages
+_INTENTS_MEMBERS = _INTENTS_BASIC | (1 << 1)  # + GUILD_MEMBERS
+_INTENTS_FULL = _INTENTS_MEMBERS | (1 << 8)  # + GUILD_PRESENCES
 _CLOSE_DISALLOWED_INTENTS = 4014
 _PRESENCE_REFRESH_S = 240.0  # re-assert Online so Discord doesn't drop the dot
 
@@ -463,12 +459,9 @@ def _request_members(sock: ssl.SSLSocket, guild_id: str, *, want_presences: bool
     )
 
 
-def _handle_dm_create(bot_id: str, data: Any) -> None:
-    """Run !commands from Discord DMs (guild chat stays on the REST poller)."""
+def _handle_message_create(bot_id: str, data: Any) -> None:
+    """Gateway MESSAGE_CREATE — real Discord bot path for guild + DM commands."""
     if not isinstance(data, dict):
-        return
-    # Guild messages have guild_id; DMs / group DMs do not.
-    if data.get("guild_id"):
         return
     author = data.get("author") if isinstance(data.get("author"), dict) else {}
     if author.get("bot"):
@@ -480,20 +473,34 @@ def _handle_dm_create(bot_id: str, data: Any) -> None:
 
     def _work() -> None:
         try:
-            from . import client, commands
+            from . import client, commands, poller
 
-            if not commands.is_command_leader():
-                return
             try:
                 msg = client.get_message(cid, mid, bot_id=bot_id)
             except client.DiscordError:
                 msg = client._normalize_message(data)  # noqa: SLF001 — gateway fallback
+            # Panel live feed (watched channel only).
+            try:
+                if poller.watched_channel(bot_id) == cid:
+                    poller.note_message(msg, cid, bot_id)
+                    from frontend.ui_web.verse_editor.panel_events import push_agent_event
+
+                    push_agent_event(
+                        {
+                            "type": "discord_message",
+                            "channel_id": cid,
+                            "bot_id": bot_id,
+                            "discord": msg,
+                        }
+                    )
+            except Exception:
+                pass
             commands.maybe_handle(msg, cid, bot_id=bot_id)
         except Exception:
             pass
 
     threading.Thread(
-        target=_work, daemon=True, name=f"discord-dm-{bot_id}-{mid[-6:]}"
+        target=_work, daemon=True, name=f"discord-msg-{bot_id}-{mid[-6:]}"
     ).start()
 
 
@@ -719,7 +726,7 @@ def _session(token: str, bot_id: str, *, intents: int) -> int:
             elif gw_op == 0:
                 event = str(msg.get("t") or "")
                 if event == "MESSAGE_CREATE":
-                    _handle_dm_create(bot_id, msg.get("d"))
+                    _handle_message_create(bot_id, msg.get("d"))
                     continue
                 if event.startswith("MESSAGE_"):
                     continue

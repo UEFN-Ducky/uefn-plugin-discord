@@ -11,9 +11,9 @@ Install or update from **Settings → Store** in the app — do not install from
 For a full member list and Online/Offline status, enable **Server Members Intent** and
 **Presence Intent** on the bot in the Discord Developer Portal (Bot → Privileged Gateway Intents).
 
-**Show offline** disconnects the presence gateway so Discord lists the bot Offline (guild
-`!commands` still work via REST). **DMs / whispers** need the bot Online (gateway up) —
-toggle Show offline off, Save, then message the bot.
+This plugin is a **real Discord bot** (Gateway `MESSAGE_CREATE`) — not a REST poller.
+**Show offline** disconnects the gateway (bot appears Offline; no `!commands` until Online again).
+Enable **Message Content Intent** in the Dev Portal if gateway content is empty (we also hydrate via REST).
 
 ## Build
 

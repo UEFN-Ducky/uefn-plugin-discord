@@ -1,6 +1,6 @@
 """Shared Discord REST client — the only place that talks to Discord.
 
-The panel poller, the panel send, and the agent tools all call these helpers.
+The Gateway command path, panel send, and agent tools all call these helpers.
 Token + guild resolve from multi-bot profiles (``backend.discord.bots``); pass
 ``bot_id`` (default ``"default"``). Callers never handle credentials. Every
 request goes through one wrapper that adds auth, decodes JSON, and retries once

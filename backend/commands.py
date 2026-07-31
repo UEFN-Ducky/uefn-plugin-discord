@@ -7,10 +7,11 @@ the same channel never double-reply.
     !ducky list                 → same
     !ducky <name> <message>     → run that ducky and post its reply back
 
-The poller feeds every new human message through ``maybe_handle``. A command
-runs on its own daemon thread (agent turns take 10s-minutes), keeps ONE
-persistent chat per (bot, channel, ducky) so follow-ups retain context, and
-posts the reply as that bot. Bot-authored messages are ignored — no reply loops.
+Gateway ``MESSAGE_CREATE`` (presence.py) feeds every human message through
+``maybe_handle``. A command runs on its own daemon thread (agent turns take
+10s–minutes), keeps ONE persistent chat per (bot, channel, ducky) so follow-ups
+retain context, and posts the reply as that bot. Bot-authored messages are
+ignored — no reply loops. No REST poller.
 """
 
 from __future__ import annotations
