@@ -121,3 +121,40 @@ def test_conv_keys_include_bot_id():
     key_a = ("default", "ch1", "p1")
     key_b = ("bob", "ch1", "p1")
     assert key_a != key_b
+
+
+def test_maybe_handle_dedupes_same_message_id(isolated_appdata, monkeypatch: pytest.MonkeyPatch):
+    _tmp, _store = isolated_appdata
+    bots.save_bot(
+        bot_id="bob",
+        label="Bob",
+        guild_id="g1",
+        prefix="!bob",
+        allowed_ids="*",
+        token="tok-b",
+        create=True,
+    )
+    ran: list[str] = []
+
+    def fake_run(text: str, channel_id: str, author: str, bot_id: str, prefix: str) -> None:
+        ran.append(text)
+
+    monkeypatch.setattr(commands, "_run_command", fake_run)
+    # Fresh process-global seen store for this test.
+    import sys
+
+    monkeypatch.delattr(sys, commands._SEEN_ATTR, raising=False)
+
+    msg = {
+        "id": "msg-99",
+        "bot": False,
+        "content": "!bob",
+        "author_id": "1",
+        "author": "ada",
+    }
+    assert commands.maybe_handle(msg, "ch", bot_id="bob") is True
+    assert commands.maybe_handle(msg, "ch", bot_id="bob") is False
+    import time
+
+    time.sleep(0.05)
+    assert ran == ["!bob"]

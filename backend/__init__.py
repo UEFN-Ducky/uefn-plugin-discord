@@ -62,6 +62,11 @@ def _start_runtime_safe(log_fn: Any) -> None:
 def _start_runtime() -> None:
     from . import poller, presence
 
+    # Drop orphan pollers from a previous register() before starting fresh.
+    try:
+        poller.stop_all(join_timeout_s=1.5)
+    except Exception:
+        pass
     presence.set_plugin_active(True)
     presence.ensure_all_enabled()
     poller.sync_enabled_bots()
@@ -69,13 +74,12 @@ def _start_runtime() -> None:
 
 def _stop_runtime() -> None:
     try:
-        from . import bots, poller, presence
+        from . import poller, presence
 
         presence.set_plugin_active(False)
-        for profile in bots.list_bots():
-            try:
-                poller.stop_bot(profile.id)
-            except Exception:
-                pass
+        try:
+            poller.stop_all(join_timeout_s=2.0)
+        except Exception:
+            pass
     except Exception:
         pass

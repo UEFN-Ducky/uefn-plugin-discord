@@ -148,7 +148,7 @@ def stop(bot_id: str | None = None) -> None:
     st.wake.set()
 
 
-def stop_bot(bot_id: str) -> None:
+def stop_bot(bot_id: str, *, join_timeout_s: float = 2.0) -> None:
     """Fully stop a bot's poller (used when disabling/deleting a bot)."""
     bid = (bot_id or "").strip()
     with _lock:
@@ -157,7 +157,22 @@ def stop_bot(bot_id: str) -> None:
             return
         st.active_channel = None
         st.stop_flag = True
+        thread = st.thread
     st.wake.set()
+    if thread is not None and thread.is_alive() and thread is not threading.current_thread():
+        thread.join(timeout=max(0.0, float(join_timeout_s)))
+    with _lock:
+        cur = _states.get(bid)
+        if cur is st and (cur.thread is None or not cur.thread.is_alive()):
+            _states.pop(bid, None)
+
+
+def stop_all(*, join_timeout_s: float = 2.0) -> None:
+    """Stop every known poller (enable/reload must be idempotent)."""
+    with _lock:
+        ids = list(_states.keys())
+    for bid in ids:
+        stop_bot(bid, join_timeout_s=join_timeout_s)
 
 
 def ensure_watching(channel_id: str, *, bot_id: str | None = None) -> None:

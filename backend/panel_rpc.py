@@ -158,6 +158,38 @@ def open_channel(channel_id: str = "", bot_id: str = "") -> dict[str, Any]:
     return {"ok": True, "channel_id": cid, "bot_id": bid, "messages": messages}
 
 
+def fetch_messages(
+    channel_id: str = "",
+    after: str = "",
+    limit: int = 50,
+    bot_id: str = "",
+) -> dict[str, Any]:
+    """UI live-refresh: messages newer than ``after`` (plugin-owned; no host push)."""
+    from . import client
+
+    bid = _bot_id(bot_id)
+    cid = str(channel_id or "").strip()
+    if not cid:
+        return {"ok": False, "error": "No channel id", "messages": [], "bot_id": bid}
+    after_id = str(after or "").strip() or None
+    try:
+        messages = client.fetch_messages(
+            cid,
+            after=after_id,
+            limit=max(1, min(int(limit or 50), 100)),
+            bot_id=bid,
+        )
+    except client.DiscordError as e:
+        return {"ok": False, "error": str(e), "messages": [], "bot_id": bid, "channel_id": cid}
+    return {
+        "ok": True,
+        "channel_id": cid,
+        "bot_id": bid,
+        "after": after_id or "",
+        "messages": messages,
+    }
+
+
 def open_portal(bot_id: str = "") -> dict[str, Any]:
     import webbrowser
 
@@ -257,6 +289,7 @@ def register_panel_rpcs(api: Any) -> None:
     api.register_panel_rpc("list_channels", list_channels)
     api.register_panel_rpc("debug", debug)
     api.register_panel_rpc("open_channel", open_channel)
+    api.register_panel_rpc("fetch_messages", fetch_messages)
     api.register_panel_rpc("open_portal", open_portal)
     api.register_panel_rpc("send", send)
     api.register_panel_rpc("list_members", list_members)

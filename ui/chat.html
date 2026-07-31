@@ -7,51 +7,136 @@
   :root {
     --bg: #313338;
     --sidebar: #2b2d31;
-    --panel: #1e1f22;
-    --border: rgba(0,0,0,0.3);
+    --border: rgba(0, 0, 0, 0.3);
     --text: #dbdee1;
     --dim: #949ba4;
     --accent: #5865f2;
     --input: #383a40;
+    --hover: rgba(255, 255, 255, 0.04);
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
-    font: 13px/1.4 "Segoe UI", system-ui, sans-serif; overflow: hidden; }
-  #app { display: grid; grid-template-columns: 200px 1fr 180px; height: 100%; }
-  aside { background: var(--sidebar); border-right: 1px solid var(--border); overflow: auto; padding: 8px; }
-  #members { border-right: none; border-left: 1px solid var(--border); }
-  .col-title { font-size: 11px; text-transform: uppercase; color: var(--dim); margin: 8px 4px; letter-spacing: 0.04em; }
-  .item {
-    display: block; width: 100%; text-align: left; border: none; background: transparent;
-    color: var(--dim); padding: 6px 8px; border-radius: 6px; cursor: pointer; font: inherit;
+  html, body {
+    margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 13px/1.4 "Segoe UI", system-ui, sans-serif; overflow: hidden;
   }
-  .item:hover, .item.active { background: rgba(255,255,255,0.06); color: var(--text); }
-  main { display: flex; flex-direction: column; min-width: 0; }
+  #app {
+    display: grid;
+    grid-template-columns: minmax(140px, 200px) minmax(0, 1fr) minmax(0, 170px);
+    height: 100%;
+  }
+  aside {
+    background: color-mix(in srgb, var(--sidebar) 92%, #fff 2%);
+    border-right: 1px solid var(--border);
+    overflow: auto;
+    padding: 10px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-height: 0;
+  }
+  #members { border-right: none; border-left: 1px solid var(--border); }
+  .col-title {
+    font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.07em; color: var(--dim); padding: 2px 8px 8px;
+  }
+  .item {
+    display: flex; align-items: center; gap: 5px; width: 100%;
+    text-align: left; border: none; background: transparent;
+    color: var(--dim); padding: 5px 8px; border-radius: 7px;
+    cursor: pointer; font: inherit; font-size: 12.5px;
+  }
+  .item:hover { background: var(--hover); color: var(--text); }
+  .item.active {
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    color: var(--text); font-weight: 600;
+  }
+  .item .hash { opacity: 0.45; flex: 0 0 auto; }
+  main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   #toolbar {
     display: flex; align-items: center; gap: 8px; padding: 8px 12px;
-    border-bottom: 1px solid var(--border); background: var(--bg); flex: 0 0 auto;
+    border-bottom: 1px solid var(--border); flex: 0 0 auto;
   }
   #toolbar select {
     background: var(--input); color: var(--text); border: 1px solid var(--border);
     border-radius: 6px; padding: 4px 8px; font: inherit; max-width: 160px;
   }
-  #channel-title { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #msgs { flex: 1; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
-  .msg { display: grid; gap: 2px; }
-  .msg .who { font-size: 12px; font-weight: 600; }
-  .msg .when { color: var(--dim); font-weight: 400; margin-left: 8px; font-size: 11px; }
-  .msg .body { white-space: pre-wrap; word-break: break-word; }
+  #channel-title {
+    font-weight: 600; flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #msgs {
+    flex: 1; overflow: auto; padding: 6px 0 10px;
+    display: flex; flex-direction: column; min-height: 0;
+    overscroll-behavior: contain;
+  }
+  .day {
+    display: flex; align-items: center; gap: 8px; margin: 14px 12px 4px;
+  }
+  .day::before, .day::after {
+    content: ""; flex: 1 1 auto; height: 1px;
+    background: rgba(127, 127, 127, 0.2);
+  }
+  .day-label {
+    flex: 0 0 auto; font-size: 10.5px; font-weight: 600;
+    letter-spacing: 0.03em; color: var(--dim);
+  }
+  .msg {
+    display: grid; grid-template-columns: 52px 1fr; column-gap: 8px;
+    align-items: start; padding: 0 12px 0 8px;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
+    font-size: 12.5px; line-height: 1.45;
+  }
+  .msg:hover { background: var(--hover); }
+  .msg.is-first { margin-top: 4px; padding-top: 1px; }
+  .msg.is-followup .who { display: none; }
+  .gutter {
+    font-size: 11px; color: var(--dim); text-align: right; padding-top: 1px;
+    opacity: 0.75; user-select: none; font-variant-numeric: tabular-nums;
+  }
+  .who { margin-bottom: 0; }
+  .nick {
+    font-weight: 700; margin-right: 4px;
+    color: hsl(var(--nick-h, 230) 62% 72%);
+  }
+  .msg.is-bot .nick { color: var(--accent); }
+  .tag {
+    font-size: 9px; font-weight: 700; letter-spacing: 0.04em;
+    color: var(--accent); margin-right: 4px; white-space: nowrap;
+  }
+  .relay {
+    font-size: 10px; color: var(--dim); margin-right: 4px; white-space: nowrap;
+  }
+  .body { white-space: pre-wrap; word-break: break-word; color: var(--text); }
+  .body.is-jumbo { font-size: 26px; line-height: 1.25; }
+  .emoji {
+    width: 20px; height: 20px; object-fit: contain; vertical-align: -4px;
+  }
+  .body.is-jumbo .emoji { width: 30px; height: 30px; vertical-align: -6px; }
+  .code {
+    font-family: ui-monospace, Consolas, monospace; font-size: 12px;
+    background: rgba(255, 255, 255, 0.08); border-radius: 4px; padding: 1px 4px;
+  }
+  .mention {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    border-radius: 4px; padding: 0 3px; font-weight: 500;
+  }
+  .link { color: var(--accent); text-decoration: none; word-break: break-all; }
+  .link:hover { text-decoration: underline; }
   #composer {
-    display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); background: var(--bg);
+    display: flex; gap: 8px; padding: 10px 12px;
+    border-top: 1px solid var(--border); background: var(--bg); flex: 0 0 auto;
   }
   #composer input {
-    flex: 1; border: none; border-radius: 8px; background: var(--input); color: var(--text);
-    padding: 10px 12px; font: inherit;
+    flex: 1; border: 1px solid transparent; border-radius: 8px;
+    background: var(--input); color: var(--text); padding: 10px 12px; font: inherit;
   }
+  #composer input:focus { outline: none; border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
   #composer button {
     border: none; border-radius: 8px; background: var(--accent); color: #fff;
     padding: 0 14px; cursor: pointer; font: inherit; font-weight: 600;
   }
+  #composer button:disabled { opacity: 0.45; cursor: default; }
   .empty, .err { color: var(--dim); padding: 24px; text-align: center; }
   .err { color: #ffb4b4; }
   @media (max-width: 720px) {
@@ -74,7 +159,7 @@
     <div id="msgs"><div class="empty">Select a bot and channel to chat.</div></div>
     <form id="composer">
       <input id="text" placeholder="Message…" autocomplete="off" />
-      <button type="submit">Send</button>
+      <button type="submit" id="send-btn">Send</button>
     </form>
   </main>
   <aside id="members">
@@ -85,6 +170,13 @@
 <script>
 (function () {
   var CHANNEL = "uefn-plugin-ui";
+  var POLL_MS = 3500;
+  var GROUP_WINDOW_MS = 7 * 60 * 1000;
+  var RELAY_RE = /^\*\*([^*\n]{1,64}?):\*\*[ \t]?([\s\S]*)$/;
+  var INLINE_TOKEN_RE =
+    /(\*\*[^*\n]+\*\*|`[^`\n]+`|<a?:\w{2,}:\d{6,}>|<#\d{6,}>|<@!?\d{6,}>|https?:\/\/[^\s<>]+|@everyone|@here)/g;
+  var EMOJI_TOKEN_RE = /^<(a?):(\w{2,}):(\d{6,})>$/;
+
   function call(method, params) {
     var id = crypto.randomUUID();
     return new Promise(function (resolve, reject) {
@@ -109,14 +201,24 @@
   }
 
   var botId = "";
+  var botLabel = "";
+  var postAs = "";
   var channelId = "";
   var channelName = "";
+  var lastId = "";
+  var pollTimer = null;
+  var sending = false;
+  var seenIds = Object.create(null);
+  var viewMsgs = [];
+  var channelById = Object.create(null);
 
   var botSelect = document.getElementById("bot-select");
   var channelList = document.getElementById("channel-list");
   var memberList = document.getElementById("member-list");
   var msgs = document.getElementById("msgs");
   var title = document.getElementById("channel-title");
+  var textInput = document.getElementById("text");
+  var sendBtn = document.getElementById("send-btn");
 
   function escapeHtml(s) {
     return String(s || "").replace(/[&<>"']/g, function (c) {
@@ -124,19 +226,289 @@
     });
   }
 
-  function appendMessage(m, scroll) {
-    if (msgs.querySelector(".empty, .err")) msgs.innerHTML = "";
+  function hashHue(key) {
+    var h = 5381;
+    var s = String(key || "");
+    for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+    return h % 360;
+  }
+
+  function authorName(m) {
+    if (typeof m.author === "string" && m.author) return m.author;
+    if (m.author && typeof m.author === "object") {
+      return m.author.global_name || m.author.username || m.author_name || "unknown";
+    }
+    return m.author_name || "unknown";
+  }
+
+  function toViewMsg(m) {
+    var parsed = Date.parse(m.timestamp || "");
+    var ts = Number.isNaN(parsed) ? 0 : parsed;
+    var author = authorName(m);
+    var bot = !!m.bot;
+    var body = String(m.content || "");
+    var colorKey = String(m.author_id || author).toLowerCase();
+    var relayedBy = "";
+    if (bot) {
+      var relay = RELAY_RE.exec(body);
+      if (relay && relay[1]) {
+        author = relay[1];
+        body = relay[2] || "";
+        colorKey = author.toLowerCase();
+        relayedBy = authorName(m);
+        bot = false;
+      }
+    }
+    return {
+      id: String(m.id || ""),
+      author: author,
+      colorKey: colorKey,
+      bot: bot,
+      relayedBy: relayedBy,
+      body: body,
+      ts: ts,
+    };
+  }
+
+  function formatTime(ts) {
+    if (!ts) return "";
+    return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function dayLabel(ts) {
+    var d = new Date(ts);
+    var now = new Date();
+    var startOf = function (x) {
+      return new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    };
+    var diffDays = Math.round((startOf(now) - startOf(d)) / 86400000);
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+    var opts = { month: "long", day: "numeric" };
+    if (d.getFullYear() !== now.getFullYear()) opts.year = "numeric";
+    return d.toLocaleDateString([], opts);
+  }
+
+  function isEmojiOnly(body) {
+    if (!String(body || "").trim()) return false;
+    var withoutCustom = body.replace(/<a?:\w{2,}:\d{6,}>/g, "");
+    if (withoutCustom === body && !/\p{Extended_Pictographic}/u.test(body)) return false;
+    try {
+      return /^[\p{Extended_Pictographic}\u200d\ufe0f\u{1F3FB}-\u{1F3FF}\u{1F1E6}-\u{1F1FF}\s]*$/u.test(
+        withoutCustom
+      );
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function renderInlineHtml(body) {
+    var parts = String(body || "").split(INLINE_TOKEN_RE);
+    var out = "";
+    for (var i = 0; i < parts.length; i++) {
+      var part = parts[i];
+      if (!part) continue;
+      if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
+        out += "<strong>" + escapeHtml(part.slice(2, -2)) + "</strong>";
+        continue;
+      }
+      if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
+        out += '<code class="code">' + escapeHtml(part.slice(1, -1)) + "</code>";
+        continue;
+      }
+      var emoji = EMOJI_TOKEN_RE.exec(part);
+      if (emoji && emoji[2] && emoji[3]) {
+        var ext = emoji[1] ? "gif" : "webp";
+        out +=
+          '<img class="emoji" src="https://cdn.discordapp.com/emojis/' +
+          escapeHtml(emoji[3]) +
+          "." +
+          ext +
+          '?size=48" alt=":' +
+          escapeHtml(emoji[2]) +
+          ':" title=":' +
+          escapeHtml(emoji[2]) +
+          ':" loading="lazy" draggable="false" />';
+        continue;
+      }
+      var ch = /^<#(\d{6,})>$/.exec(part);
+      if (ch && ch[1]) {
+        out +=
+          '<span class="mention">#' +
+          escapeHtml(channelById[ch[1]] || "channel") +
+          "</span>";
+        continue;
+      }
+      if (/^<@!?\d{6,}>$/.test(part)) {
+        out += '<span class="mention">@user</span>';
+        continue;
+      }
+      if (part === "@everyone" || part === "@here") {
+        out += '<span class="mention">' + escapeHtml(part) + "</span>";
+        continue;
+      }
+      if (/^https?:\/\//.test(part)) {
+        out +=
+          '<a class="link" href="' +
+          escapeHtml(part) +
+          '" target="_blank" rel="noopener noreferrer">' +
+          escapeHtml(part) +
+          "</a>";
+        continue;
+      }
+      out += escapeHtml(part);
+    }
+    return out;
+  }
+
+  function updateComposerPlaceholder() {
+    var asName = postAs || botLabel || "bot";
+    if (!channelId) {
+      textInput.placeholder = "Pick a channel first";
+      return;
+    }
+    textInput.placeholder =
+      "Message as " + asName + (channelName ? " in #" + channelName : "") + "…";
+  }
+
+  function stopPoll() {
+    if (pollTimer) {
+      window.clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  function startPoll() {
+    stopPoll();
+    if (!channelId || !botId) return;
+    pollTimer = window.setInterval(function () {
+      pollNew();
+    }, POLL_MS);
+  }
+
+  function rebuildMessages() {
+    msgs.innerHTML = "";
+    if (!viewMsgs.length) {
+      msgs.innerHTML = '<div class="empty">No messages yet.</div>';
+      return;
+    }
+    var prev = null;
+    for (var i = 0; i < viewMsgs.length; i++) {
+      var m = viewMsgs[i];
+      var sameDay =
+        !!prev &&
+        !!prev.ts &&
+        !!m.ts &&
+        new Date(prev.ts).toDateString() === new Date(m.ts).toDateString();
+      if (m.ts && (!prev || !sameDay)) {
+        var day = document.createElement("div");
+        day.className = "day";
+        day.innerHTML = '<span class="day-label">' + escapeHtml(dayLabel(m.ts)) + "</span>";
+        msgs.appendChild(day);
+      }
+      var first =
+        !prev ||
+        !sameDay ||
+        prev.author !== m.author ||
+        prev.bot !== m.bot ||
+        m.ts - prev.ts > GROUP_WINDOW_MS;
+      msgs.appendChild(renderMsgEl(m, first));
+      prev = m;
+    }
+  }
+
+  function renderMsgEl(m, first) {
     var el = document.createElement("div");
-    el.className = "msg";
+    el.className =
+      "msg" + (first ? " is-first" : " is-followup") + (m.bot ? " is-bot" : "");
     el.dataset.id = m.id || "";
-    var author = (m.author && (m.author.global_name || m.author.username)) || m.author_name || "unknown";
-    var when = m.timestamp ? new Date(m.timestamp).toLocaleTimeString() : "";
+    el.style.setProperty("--nick-h", String(hashHue(m.colorKey)));
+    var jumbo = isEmojiOnly(m.body);
+    var head = "";
+    if (first) {
+      head =
+        '<span class="nick">&lt;' +
+        escapeHtml(m.author) +
+        "&gt;</span>" +
+        (m.bot ? '<span class="tag">BOT</span>' : "") +
+        (m.relayedBy
+          ? '<span class="relay" title="Sent from Ducky via ' +
+            escapeHtml(m.relayedBy) +
+            '">via ' +
+            escapeHtml(m.relayedBy) +
+            "</span>"
+          : "") +
+        " ";
+    }
     el.innerHTML =
-      '<div class="who">' + escapeHtml(author) +
-      '<span class="when">' + escapeHtml(when) + "</span></div>" +
-      '<div class="body">' + escapeHtml(m.content || "") + "</div>";
-    msgs.appendChild(el);
-    if (scroll !== false) msgs.scrollTop = msgs.scrollHeight;
+      '<div class="gutter" aria-hidden="true">' +
+      escapeHtml(formatTime(m.ts)) +
+      "</div>" +
+      '<div class="main"><div class="body' +
+      (jumbo ? " is-jumbo" : "") +
+      '">' +
+      head +
+      renderInlineHtml(m.body) +
+      "</div></div>";
+    return el;
+  }
+
+  function ingestMessages(list, scroll) {
+    var added = 0;
+    (list || []).forEach(function (raw) {
+      var id = String((raw && raw.id) || "");
+      if (id && seenIds[id]) return;
+      if (id) seenIds[id] = true;
+      var vm = toViewMsg(raw || {});
+      viewMsgs.push(vm);
+      if (id && (!lastId || compareSnowflake(id, lastId) > 0)) lastId = id;
+      added += 1;
+    });
+    if (added) {
+      viewMsgs.sort(function (a, b) {
+        return compareSnowflake(a.id, b.id);
+      });
+      var nearBottom = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 80;
+      rebuildMessages();
+      if (scroll !== false && nearBottom) msgs.scrollTop = msgs.scrollHeight;
+    }
+    return added;
+  }
+
+  function compareSnowflake(a, b) {
+    var aa = String(a || "0");
+    var bb = String(b || "0");
+    if (aa.length !== bb.length) return aa.length < bb.length ? -1 : 1;
+    if (aa === bb) return 0;
+    return aa < bb ? -1 : 1;
+  }
+
+  function pollNew() {
+    if (!channelId || !botId || !lastId) return;
+    rpc("fetch_messages", {
+      channel_id: channelId,
+      after: lastId,
+      bot_id: botId,
+      limit: 50,
+    })
+      .then(function (res) {
+        if (!res || res.ok === false) return;
+        if (String(res.channel_id || channelId) !== channelId) return;
+        ingestMessages(res.messages || [], true);
+      })
+      .catch(function () {});
+  }
+
+  function loadStatus() {
+    return rpc("status", { bot_id: botId })
+      .then(function (st) {
+        postAs = (st && (st.post_name || st.post_as)) || "";
+        updateComposerPlaceholder();
+      })
+      .catch(function () {
+        postAs = "";
+        updateComposerPlaceholder();
+      });
   }
 
   function loadBots() {
@@ -145,6 +517,8 @@
       botSelect.innerHTML = "";
       if (!bots.length) {
         botSelect.innerHTML = '<option value="">No bots</option>';
+        botId = "";
+        botLabel = "";
         return;
       }
       bots.forEach(function (b) {
@@ -157,16 +531,23 @@
         botId = bots[0].id;
       }
       botSelect.value = botId;
-      return loadChannels();
+      var cur = bots.find(function (b) { return b.id === botId; });
+      botLabel = (cur && (cur.label || cur.id)) || botId;
+      postAs = (cur && cur.post_as) || postAs || "";
+      return loadChannels().then(function () {
+        return loadStatus();
+      });
     });
   }
 
   function loadChannels() {
     channelList.innerHTML = '<div class="empty">Loading…</div>';
+    channelById = Object.create(null);
     return rpc("list_channels", { bot_id: botId }).then(function (res) {
       channelList.innerHTML = "";
       if (!res || res.ok === false) {
-        channelList.innerHTML = '<div class="err">' + escapeHtml((res && res.error) || "Failed") + "</div>";
+        channelList.innerHTML =
+          '<div class="err">' + escapeHtml((res && res.error) || "Failed") + "</div>";
         return;
       }
       var channels = res.channels || [];
@@ -175,16 +556,19 @@
         return;
       }
       channels.forEach(function (ch) {
+        channelById[ch.id] = ch.name || ch.id;
         var btn = document.createElement("button");
         btn.type = "button";
         btn.className = "item" + (ch.id === channelId ? " active" : "");
-        btn.textContent = "#" + (ch.name || ch.id);
-        btn.onclick = function () { openChannel(ch.id, ch.name); };
+        btn.innerHTML =
+          '<span class="hash">#</span><span>' +
+          escapeHtml(ch.name || ch.id) +
+          "</span>";
+        btn.onclick = function () {
+          openChannel(ch.id, ch.name);
+        };
         channelList.appendChild(btn);
       });
-      rpc("status", { bot_id: botId }).then(function (st) {
-        /* warm poller */
-      }).catch(function () {});
       loadMembers();
     });
   }
@@ -193,94 +577,128 @@
     channelId = id;
     channelName = name || id;
     title.textContent = "#" + channelName;
+    lastId = "";
+    seenIds = Object.create(null);
+    viewMsgs = [];
+    stopPoll();
     Array.prototype.forEach.call(channelList.querySelectorAll(".item"), function (el) {
-      el.classList.toggle("active", el.textContent === "#" + channelName);
+      var label = "#" + channelName;
+      el.classList.toggle("active", el.textContent.replace(/\s+/g, "") === label.replace(/\s+/g, "") ||
+        (el.querySelector("span:last-child") &&
+          el.querySelector("span:last-child").textContent === channelName));
     });
     msgs.innerHTML = '<div class="empty">Loading…</div>';
-    rpc("open_channel", { channel_id: id, bot_id: botId }).then(function (res) {
-      msgs.innerHTML = "";
-      if (!res || res.ok === false) {
-        msgs.innerHTML = '<div class="err">' + escapeHtml((res && res.error) || "Failed") + "</div>";
-        return;
-      }
-      (res.messages || []).forEach(function (m) { appendMessage(m, false); });
-      msgs.scrollTop = msgs.scrollHeight;
-      if (!msgs.children.length) msgs.innerHTML = '<div class="empty">No messages yet.</div>';
-    }).catch(function (e) {
-      msgs.innerHTML = '<div class="err">' + escapeHtml(e.message || e) + "</div>";
-    });
+    updateComposerPlaceholder();
+    rpc("open_channel", { channel_id: id, bot_id: botId })
+      .then(function (res) {
+        msgs.innerHTML = "";
+        if (!res || res.ok === false) {
+          msgs.innerHTML =
+            '<div class="err">' + escapeHtml((res && res.error) || "Failed") + "</div>";
+          return;
+        }
+        ingestMessages(res.messages || [], false);
+        msgs.scrollTop = msgs.scrollHeight;
+        if (!viewMsgs.length) msgs.innerHTML = '<div class="empty">No messages yet.</div>';
+        startPoll();
+      })
+      .catch(function (e) {
+        msgs.innerHTML = '<div class="err">' + escapeHtml(e.message || e) + "</div>";
+      });
   }
 
   function loadMembers() {
     memberList.innerHTML = '<div class="empty">Loading…</div>';
-    rpc("list_members", { bot_id: botId }).then(function (res) {
-      memberList.innerHTML = "";
-      if (!res || res.ok === false) {
-        memberList.innerHTML = '<div class="err">' + escapeHtml((res && res.error) || "—") + "</div>";
-        return;
-      }
-      var groups = res.groups || [];
-      if (!groups.length) {
-        memberList.innerHTML = '<div class="empty">' + escapeHtml(res.error || "No members") + "</div>";
-        return;
-      }
-      groups.forEach(function (g) {
-        var t = document.createElement("div");
-        t.className = "col-title";
-        t.textContent = (g.name || "Members") + " — " + (g.count || (g.members || []).length);
-        memberList.appendChild(t);
-        (g.members || []).forEach(function (m) {
-          var el = document.createElement("div");
-          el.className = "item";
-          el.textContent = m.name || m.id;
-          memberList.appendChild(el);
+    rpc("list_members", { bot_id: botId })
+      .then(function (res) {
+        memberList.innerHTML = "";
+        if (!res || res.ok === false) {
+          memberList.innerHTML =
+            '<div class="err">' + escapeHtml((res && res.error) || "—") + "</div>";
+          return;
+        }
+        var groups = res.groups || [];
+        if (!groups.length) {
+          memberList.innerHTML =
+            '<div class="empty">' + escapeHtml(res.error || "No members") + "</div>";
+          return;
+        }
+        groups.forEach(function (g) {
+          var t = document.createElement("div");
+          t.className = "col-title";
+          t.textContent =
+            (g.name || "Members") + " — " + (g.count || (g.members || []).length);
+          memberList.appendChild(t);
+          (g.members || []).forEach(function (m) {
+            var el = document.createElement("div");
+            el.className = "item";
+            el.textContent = m.name || m.id;
+            memberList.appendChild(el);
+          });
         });
+      })
+      .catch(function (e) {
+        memberList.innerHTML =
+          '<div class="err">' + escapeHtml(e.message || e) + "</div>";
       });
-    }).catch(function (e) {
-      memberList.innerHTML = '<div class="err">' + escapeHtml(e.message || e) + "</div>";
-    });
   }
 
   botSelect.onchange = function () {
     botId = botSelect.value;
+    botLabel = botSelect.options[botSelect.selectedIndex]
+      ? botSelect.options[botSelect.selectedIndex].textContent
+      : botId;
     channelId = "";
-    loadChannels();
+    channelName = "";
+    lastId = "";
+    seenIds = Object.create(null);
+    viewMsgs = [];
+    stopPoll();
+    title.textContent = "# select a channel";
+    msgs.innerHTML = '<div class="empty">Select a channel to chat.</div>';
+    loadChannels().then(function () {
+      return loadStatus();
+    });
   };
 
   document.getElementById("composer").onsubmit = function (ev) {
     ev.preventDefault();
-    var input = document.getElementById("text");
-    var text = input.value.trim();
-    if (!text || !channelId) return;
-    input.value = "";
-    rpc("send", { channel_id: channelId, text: text, bot_id: botId }).then(function (res) {
-      if (res && res.ok && res.message) appendMessage(res.message, true);
-      else if (res && res.error) {
+    var text = textInput.value.trim();
+    if (!text || !channelId || !botId || sending) return;
+    sending = true;
+    sendBtn.disabled = true;
+    textInput.value = "";
+    rpc("send", { channel_id: channelId, text: text, bot_id: botId })
+      .then(function (res) {
+        if (res && res.ok && res.message) {
+          ingestMessages([res.message], true);
+          msgs.scrollTop = msgs.scrollHeight;
+        } else if (res && res.error) {
+          var err = document.createElement("div");
+          err.className = "err";
+          err.textContent = res.error;
+          msgs.appendChild(err);
+        }
+      })
+      .catch(function (e) {
         var err = document.createElement("div");
         err.className = "err";
-        err.textContent = res.error;
+        err.textContent = String(e.message || e);
         msgs.appendChild(err);
-      }
-    }).catch(function (e) {
-      var err = document.createElement("div");
-      err.className = "err";
-      err.textContent = String(e.message || e);
-      msgs.appendChild(err);
-    });
+      })
+      .then(function () {
+        sending = false;
+        sendBtn.disabled = false;
+        textInput.focus();
+      });
   };
 
-  call("plugin.subscribe", { types: ["discord_message", "discord_changed"] });
+  call("plugin.subscribe", { types: ["discord_changed"] }).catch(function () {});
   window.addEventListener("message", function (ev) {
     var d = ev.data;
     if (!d || d.channel !== CHANNEL || !d.event) return;
     if (d.event.type === "discord_changed") {
       loadBots();
-      return;
-    }
-    if (d.event.type === "discord_message") {
-      var msg = d.event.discord || d.event.message || null;
-      var cid = String(d.event.channel_id || (msg && msg.channel_id) || "");
-      if (msg && cid === channelId) appendMessage(msg, true);
     }
   });
 

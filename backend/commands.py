@@ -15,6 +15,7 @@ posts the reply as that bot. Bot-authored messages are ignored — no reply loop
 
 from __future__ import annotations
 
+import sys
 import threading
 from typing import Any
 
@@ -25,6 +26,9 @@ from . import bots, client
 DEFAULT_PREFIX = bots.DEFAULT_PREFIX
 _MAX_DISCORD = 1900  # Discord cap is 2000; leave room for the name prefix.
 _TIMEOUT_S = 300.0
+_SEEN_CAP = 512
+# Survives module reload so orphan poller threads + new code share one dedupe set.
+_SEEN_ATTR = "_uefn_discord_cmd_seen"
 
 _lock = threading.Lock()
 # One persistent chat per (bot_id, channel_id, profile_id) — follow-ups keep context.
@@ -44,6 +48,34 @@ def is_authorized(author_id: str, allowed: set[str]) -> bool:
     return "*" in allowed or (bool(author_id) and author_id in allowed)
 
 
+def _seen_store() -> dict[str, Any]:
+    store = getattr(sys, _SEEN_ATTR, None)
+    if not isinstance(store, dict) or "lock" not in store:
+        store = {"lock": threading.Lock(), "order": [], "set": set()}
+        setattr(sys, _SEEN_ATTR, store)
+    return store
+
+
+def _claim_message(bot_id: str, message_id: str) -> bool:
+    """True once per (bot_id, message_id). Empty id always claims (no dedupe)."""
+    mid = (message_id or "").strip()
+    if not mid:
+        return True
+    key = f"{bot_id}\0{mid}"
+    store = _seen_store()
+    with store["lock"]:
+        seen: set[str] = store["set"]
+        order: list[str] = store["order"]
+        if key in seen:
+            return False
+        seen.add(key)
+        order.append(key)
+        while len(order) > _SEEN_CAP:
+            old = order.pop(0)
+            seen.discard(old)
+        return True
+
+
 def maybe_handle(message: dict[str, Any], channel_id: str, *, bot_id: str | None = None) -> bool:
     """True when the message is this bot's command (handled on a background thread)."""
     if message.get("bot"):
@@ -55,6 +87,9 @@ def maybe_handle(message: dict[str, Any], channel_id: str, *, bot_id: str | None
     prefix_l = prefix.lower()
     # Exact prefix or prefix + space — "!ducky" / "!ducky x" yes; "!duckyx" no.
     if not (text_l == prefix_l or text_l.startswith(prefix_l + " ")):
+        return False
+    # Claim before any side effect so orphan pollers / double-emits cannot multi-reply.
+    if not _claim_message(bid, str(message.get("id") or "")):
         return False
     rest_raw = text[len(prefix) :]
     whoami_rest = rest_raw.strip().lower()
