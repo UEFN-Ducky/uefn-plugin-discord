@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.json_util import tool_json
+from backend.util.json_util import tool_json
 
 from . import bots as discord_bots
 from . import client
@@ -29,10 +29,18 @@ def _call(fn, *args: Any, **kwargs: Any) -> Any:
         raise ValueError(str(e)) from e
 
 
+def _tool(api: Any, **kwargs: Any):
+    """``api.tool`` — prefer listener=False; fall back on older hosts."""
+    try:
+        return api.tool(listener=False, **kwargs)
+    except TypeError:
+        return api.tool(**kwargs)
+
+
 def register_tools(api: Any) -> None:
     """Register discord_* MCP tools on the shared FastMCP instance."""
 
-    @api.tool(listener=False, intent=_INTENT)
+    @_tool(api, intent=_INTENT)
     def discord_list_bots(query: str = "", pretty: bool = False) -> str:
         """List configured Discord bots in UEFN-Ducky (id, label, Discord username, prefix, guild).
 
@@ -67,13 +75,13 @@ def register_tools(api: Any) -> None:
             rows.append(row)
         return tool_json({"query": query, "bots": rows, "count": len(rows)}, pretty=pretty)
 
-    @api.tool(listener=False, intent=_INTENT)
+    @_tool(api, intent=_INTENT)
     def discord_list_channels(pretty: bool = False) -> str:
         """List channels and categories of the configured Discord server (id, name, type, parent)."""
         channels = _call(client.list_channels, text_only=False)
         return tool_json({"channels": channels}, pretty=pretty)
 
-    @api.tool(listener=False, intent=_INTENT)
+    @_tool(api, intent=_INTENT)
     def discord_read_channel(channel_id: str, limit: int = 50, pretty: bool = False) -> str:
         """Read recent messages from a Discord channel (oldest-first) to summarize or analyze them."""
         messages = _call(
@@ -83,13 +91,13 @@ def register_tools(api: Any) -> None:
         )
         return tool_json({"channel_id": channel_id.strip(), "messages": messages}, pretty=pretty)
 
-    @api.tool(listener=False, intent=_INTENT)
+    @_tool(api, intent=_INTENT)
     def discord_send_message(channel_id: str, text: str, pretty: bool = False) -> str:
         """Post a message to a Discord channel as the bot. Use only when the user asked you to send something."""
         msg = _call(client.send_message, channel_id.strip(), text)
         return tool_json({"sent": True, "message": msg}, pretty=pretty)
 
-    @api.tool(listener=False, intent=_INTENT)
+    @_tool(api, intent=_INTENT)
     def discord_create_channel(
         name: str,
         channel_type: str = "text",
@@ -109,7 +117,7 @@ def register_tools(api: Any) -> None:
         created = _call(client.create_channel, name, **kwargs)
         return tool_json({"created": True, "channel": created}, pretty=pretty)
 
-    @api.tool(listener=False, intent=_INTENT)
+    @_tool(api, intent=_INTENT)
     def discord_edit_channel(
         channel_id: str,
         name: str = "",
@@ -134,13 +142,13 @@ def register_tools(api: Any) -> None:
         updated = _call(client.edit_channel, channel_id.strip(), **kwargs)
         return tool_json({"edited": True, "channel": updated}, pretty=pretty)
 
-    @api.tool(listener=False, intent=_INTENT)
+    @_tool(api, intent=_INTENT)
     def discord_delete_channel(channel_id: str, pretty: bool = False) -> str:
         """Delete a channel or category by id. Irreversible."""
         result = _call(client.delete_channel, channel_id.strip())
         return tool_json(result, pretty=pretty)
 
-    @api.tool(listener=False, intent=_INTENT)
+    @_tool(api, intent=_INTENT)
     def discord_set_channel_permissions(
         channel_id: str,
         overwrite_id: str,
@@ -160,13 +168,13 @@ def register_tools(api: Any) -> None:
         )
         return tool_json(result, pretty=pretty)
 
-    @api.tool(listener=False, intent=_INTENT)
+    @_tool(api, intent=_INTENT)
     def discord_list_roles(pretty: bool = False) -> str:
         """List roles of the configured Discord server."""
         roles = _call(client.list_roles)
         return tool_json({"roles": roles}, pretty=pretty)
 
-    @api.tool(listener=False, intent=_INTENT)
+    @_tool(api, intent=_INTENT)
     def discord_create_role(
         name: str,
         permissions: str = "",
@@ -186,7 +194,7 @@ def register_tools(api: Any) -> None:
         role = _call(client.create_role, name, **kwargs)
         return tool_json({"created": True, "role": role}, pretty=pretty)
 
-    @api.tool(listener=False, intent=_INTENT)
+    @_tool(api, intent=_INTENT)
     def discord_edit_role(
         role_id: str,
         name: str = "",
@@ -211,13 +219,13 @@ def register_tools(api: Any) -> None:
         role = _call(client.edit_role, role_id.strip(), **kwargs)
         return tool_json({"edited": True, "role": role}, pretty=pretty)
 
-    @api.tool(listener=False, intent=_INTENT)
+    @_tool(api, intent=_INTENT)
     def discord_delete_role(role_id: str, pretty: bool = False) -> str:
         """Delete a role by id."""
         result = _call(client.delete_role, role_id.strip())
         return tool_json(result, pretty=pretty)
 
-    @api.tool(listener=False, intent=_INTENT)
+    @_tool(api, intent=_INTENT)
     def discord_list_members(limit: int = 100, after: str = "", pretty: bool = False) -> str:
         """List guild members (id, username, nick, roles). Requires Server Members Intent. Paginate with after=user_id."""
         members = _call(
@@ -227,7 +235,7 @@ def register_tools(api: Any) -> None:
         )
         return tool_json({"members": members}, pretty=pretty)
 
-    @api.tool(listener=False, intent=_INTENT)
+    @_tool(api, intent=_INTENT)
     def discord_set_member_roles(
         user_id: str,
         role_id: str,
@@ -242,7 +250,7 @@ def register_tools(api: Any) -> None:
             result = _call(client.add_role, user_id.strip(), role_id.strip())
         return tool_json(result, pretty=pretty)
 
-    @api.tool(listener=False, intent=_INTENT)
+    @_tool(api, intent=_INTENT)
     def discord_set_nickname(user_id: str, nick: str = "", pretty: bool = False) -> str:
         """Set a member's nickname. Pass empty nick to clear it."""
         result = _call(client.edit_member, user_id.strip(), nick=nick)
@@ -251,7 +259,7 @@ def register_tools(api: Any) -> None:
             pretty=pretty,
         )
 
-    @api.tool(listener=False, intent=_INTENT)
+    @_tool(api, intent=_INTENT)
     def discord_timeout_member(user_id: str, minutes: int = 10, pretty: bool = False) -> str:
         """Timeout a member for N minutes (0 clears the timeout). Requires Moderate Members."""
         result = _call(client.timeout_member, user_id.strip(), minutes=int(minutes))
@@ -265,13 +273,13 @@ def register_tools(api: Any) -> None:
             pretty=pretty,
         )
 
-    @api.tool(listener=False, intent=_INTENT)
+    @_tool(api, intent=_INTENT)
     def discord_kick_member(user_id: str, reason: str = "", pretty: bool = False) -> str:
         """Kick a member from the server. Requires Kick Members."""
         result = _call(client.kick_member, user_id.strip(), reason=reason.strip() or None)
         return tool_json(result, pretty=pretty)
 
-    @api.tool(listener=False, intent=_INTENT)
+    @_tool(api, intent=_INTENT)
     def discord_ban_member(
         user_id: str,
         delete_message_seconds: int = 0,
@@ -287,19 +295,19 @@ def register_tools(api: Any) -> None:
         )
         return tool_json(result, pretty=pretty)
 
-    @api.tool(listener=False, intent=_INTENT)
+    @_tool(api, intent=_INTENT)
     def discord_edit_message(channel_id: str, message_id: str, text: str, pretty: bool = False) -> str:
         """Edit a message (usually one the bot sent)."""
         msg = _call(client.edit_message, channel_id.strip(), message_id.strip(), text)
         return tool_json({"edited": True, "message": msg}, pretty=pretty)
 
-    @api.tool(listener=False, intent=_INTENT)
+    @_tool(api, intent=_INTENT)
     def discord_delete_message(channel_id: str, message_id: str, pretty: bool = False) -> str:
         """Delete a message. Requires Manage Messages for others' messages."""
         result = _call(client.delete_message, channel_id.strip(), message_id.strip())
         return tool_json(result, pretty=pretty)
 
-    @api.tool(listener=False, intent=_INTENT)
+    @_tool(api, intent=_INTENT)
     def discord_create_invite(
         channel_id: str,
         max_age: int = 86400,

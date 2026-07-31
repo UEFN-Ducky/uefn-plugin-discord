@@ -161,7 +161,7 @@ def _roster_text(prefix: str) -> str:
 
 
 def _spawn_conv(profile: dict[str, Any]) -> str:
-    from backend.tools.ducky_panel import _profile_spawn_kwargs
+    from backend.tools.panel.ducky_panel import _profile_spawn_kwargs
     from frontend.settings import PanelSettings
     from frontend.ui_web.agent_modes import notify_chats_changed
     from frontend.ui_web.project_chats import create_conversation

@@ -14,7 +14,7 @@ Install or update from **Settings → Store** in the app — do not install from
 py scripts/build_zip.py
 ```
 
-Writes `deploy/discord-1.1.0.ducky-plugin.zip` (scripts/ and deploy/ are not packed).
+Writes `deploy/discord-1.1.1.ducky-plugin.zip` (scripts/ and deploy/ are not packed).
 
 ## Secrets
 
