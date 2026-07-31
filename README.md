@@ -8,13 +8,16 @@ and Phase-2 HTML UI (`ui/settings.html`, `ui/chat.html`).
 
 Install or update from **Settings → Store** in the app — do not install from a zip by hand.
 
+For a full member list and Online/Offline status, enable **Server Members Intent** and
+**Presence Intent** on the bot in the Discord Developer Portal (Bot → Privileged Gateway Intents).
+
 ## Build
 
 ```bash
 py scripts/build_zip.py
 ```
 
-Writes `deploy/discord-1.1.0.ducky-plugin.zip` (scripts/ and deploy/ are not packed).
+Writes `deploy/discord-<version>.ducky-plugin.zip` (scripts/ and deploy/ are not packed).
 
 ## Secrets
 

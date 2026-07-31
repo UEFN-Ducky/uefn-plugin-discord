@@ -32,20 +32,27 @@ _RECONNECT_MAX_S = 120.0
 
 # GUILDS alone is enough to hold an IDENTIFY session and show the bot Online.
 # Privileged intents power the member sidebar; Discord closes with 4014 if they
-# are requested without Dev Portal toggles — we fall back to GUILDS-only then.
+# are requested without Dev Portal toggles — fall back: FULL → MEMBERS → BASIC.
 _INTENTS_BASIC = 1 << 0  # GUILDS
-_INTENTS_FULL = (1 << 0) | (1 << 1) | (1 << 8)  # GUILDS | GUILD_MEMBERS | GUILD_PRESENCES
+_INTENTS_MEMBERS = (1 << 0) | (1 << 1)  # GUILDS | GUILD_MEMBERS
+_INTENTS_FULL = (1 << 0) | (1 << 1) | (1 << 8)  # + GUILD_PRESENCES
 _CLOSE_DISALLOWED_INTENTS = 4014
 _PRESENCE_REFRESH_S = 240.0  # re-assert Online so Discord doesn't drop the dot
 
 _ONLINE_STATUSES = frozenset({"online", "idle", "dnd"})
+# Intent ladder level per bot: 2=full, 1=members, 0=guilds-only
+_LEVEL_FULL = 2
+_LEVEL_MEMBERS = 1
+_LEVEL_BASIC = 0
 
 _lock = threading.Lock()
 # When False, presence threads park (plugin disabled / Store update reload).
 _plugin_active = True
 # bot_id -> set once that bot's presence thread has been spawned
 _started_bots: set[str] = set()
-# bot_id -> prefer GUILDS-only after a 4014 (privileged intents not enabled)
+# bot_id -> intent ladder level after 4014 demotions
+_intent_level: dict[str, int] = {}
+# Back-compat alias used by tests
 _basic_intents_bots: set[str] = set()
 # bot_id -> Settings changed (show_offline etc.); session should PRESENCE_UPDATE now
 _presence_bump: set[str] = set()
@@ -209,14 +216,30 @@ def group_members(
     return groups
 
 
+def intent_level(bot_id: str | None = None) -> int:
+    bid = (bot_id or _bots.DEFAULT_BOT_ID).strip() or _bots.DEFAULT_BOT_ID
+    with _lock:
+        return int(_intent_level.get(bid, _LEVEL_FULL))
+
+
 def snapshot(guild_id: str | None = None, *, bot_id: str | None = None) -> dict[str, Any]:
     """Grouped member list for the panel. Empty groups if cache is cold."""
     bid = (bot_id or _bots.DEFAULT_BOT_ID).strip() or _bots.DEFAULT_BOT_ID
     gid = (guild_id or _bots.get_guild_id(bid) or "").strip()
+    # Keep our own row green even when Presence Intent is off (no PRESENCE_UPDATE).
+    _mark_self_status(bid, desired_presence_status(bid))
     with _lock:
         g = _cache.get((bid, gid)) if gid else None
+        level = int(_intent_level.get(bid, _LEVEL_FULL))
         if not g:
-            return {"ok": True, "guild_id": gid, "bot_id": bid, "groups": [], "ready": False}
+            return {
+                "ok": True,
+                "guild_id": gid,
+                "bot_id": bid,
+                "groups": [],
+                "ready": False,
+                "intent_level": level,
+            }
         members = dict(g.get("members") or {})
         roles = dict(g.get("roles") or {})
     return {
@@ -225,6 +248,7 @@ def snapshot(guild_id: str | None = None, *, bot_id: str | None = None) -> dict[
         "bot_id": bid,
         "groups": group_members(members, roles),
         "ready": bool(members),
+        "intent_level": level,
     }
 
 
@@ -410,7 +434,7 @@ def _connect() -> ssl.SSLSocket:
     return sock
 
 
-def _request_members(sock: ssl.SSLSocket, guild_id: str) -> None:
+def _request_members(sock: ssl.SSLSocket, guild_id: str, *, want_presences: bool) -> None:
     _send_json(
         sock,
         {
@@ -419,7 +443,7 @@ def _request_members(sock: ssl.SSLSocket, guild_id: str) -> None:
                 "guild_id": guild_id,
                 "query": "",
                 "limit": 0,
-                "presences": True,
+                "presences": bool(want_presences),
             },
         },
     )
@@ -448,14 +472,18 @@ def _handle_dispatch(sock: ssl.SSLSocket, event: str, data: Any, *, bot_id: str)
                     user=u if isinstance(u, dict) else None,
                 )
         need_request = False
+        want_presences = True
         with _lock:
             slot = _guild_slot(bot_id, gid)
+            level = int(_intent_level.get(bot_id, _LEVEL_FULL))
+            want_presences = level >= _LEVEL_FULL
             # GUILD_CREATE only embeds a partial member set — request the full roster once.
-            if not slot["requested"]:
+            # Members Intent required; skip on guilds-only fallback.
+            if level >= _LEVEL_MEMBERS and not slot["requested"]:
                 slot["requested"] = True
                 need_request = True
         if need_request:
-            _request_members(sock, gid)
+            _request_members(sock, gid, want_presences=want_presences)
         return
 
     if event == "GUILD_MEMBERS_CHUNK" and isinstance(data, dict):
@@ -661,7 +689,8 @@ def _session(token: str, bot_id: str, *, intents: int) -> int:
             sock.close()
         except OSError:
             pass
-        _clear_cache(bot_id)
+        # Keep the sidebar cache across reconnects — wiping here made everyone
+        # disappear whenever Discord closed the socket (incl. 4014 demotion).
     return close_code
 
 
@@ -690,18 +719,30 @@ def _run(bot_id: str) -> None:
             time.sleep(30.0)
             continue
         with _lock:
-            use_basic = bot_id in _basic_intents_bots
-        intents = _INTENTS_BASIC if use_basic else _INTENTS_FULL
+            level = int(_intent_level.get(bot_id, _LEVEL_FULL))
+        if level >= _LEVEL_FULL:
+            intents = _INTENTS_FULL
+        elif level >= _LEVEL_MEMBERS:
+            intents = _INTENTS_MEMBERS
+        else:
+            intents = _INTENTS_BASIC
         started = time.monotonic()
         close_code = 0
         try:
             close_code = _session(token, bot_id, intents=intents)
         except Exception:
             close_code = 0
-        if close_code == _CLOSE_DISALLOWED_INTENTS and not use_basic:
-            # Privileged intents not enabled in Dev Portal — keep Online with GUILDS.
+        if close_code == _CLOSE_DISALLOWED_INTENTS and level > _LEVEL_BASIC:
+            # Drop one privileged intent at a time (Presence first, then Members).
             with _lock:
-                _basic_intents_bots.add(bot_id)
+                nxt = _LEVEL_MEMBERS if level >= _LEVEL_FULL else _LEVEL_BASIC
+                _intent_level[bot_id] = nxt
+                if nxt <= _LEVEL_BASIC:
+                    _basic_intents_bots.add(bot_id)
+                # Allow a fresh Request Guild Members on the next session.
+                for (bid, _gid), slot in _cache.items():
+                    if bid == bot_id and isinstance(slot, dict):
+                        slot["requested"] = False
             backoff = _RECONNECT_MIN_S
             continue
         # A session that held for a while earns a fresh (short) backoff.

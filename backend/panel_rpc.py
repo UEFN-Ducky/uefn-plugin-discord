@@ -222,6 +222,22 @@ def send(channel_id: str = "", text: str = "", bot_id: str = "") -> dict[str, An
         return {"ok": False, "error": str(e), "bot_id": bid}
 
 
+def _members_intent_hint(err: str, intent_level: int) -> str:
+    low = (err or "").lower()
+    if "403" in low or "missing access" in low or "privileged" in low:
+        return (
+            "Enable Server Members Intent (and Presence Intent for Online/Offline) "
+            "in the Discord Developer Portal → Bot → Privileged Gateway Intents, "
+            "then restart UEFN-Ducky."
+        )
+    if intent_level <= 0:
+        return (
+            "Member list needs Server Members Intent in the Discord Developer Portal. "
+            "Presence Intent is required for Online/Offline dots."
+        )
+    return err or "Member list unavailable"
+
+
 def list_members(bot_id: str = "") -> dict[str, Any]:
     from . import client, presence
 
@@ -231,18 +247,21 @@ def list_members(bot_id: str = "") -> dict[str, Any]:
         return {"ok": False, "error": "No bot token set", "groups": [], "bot_id": bid}
     presence.ensure_started(bid)
     snap = presence.snapshot(gid, bot_id=bid)
+    level = int(snap.get("intent_level") if snap.get("intent_level") is not None else 2)
     if snap.get("ready") and snap.get("groups"):
         return snap
     try:
         members = client.list_guild_members(limit=100, bot_id=bid)
     except client.DiscordError as e:
+        hint = _members_intent_hint(str(e), level)
         return {
             "ok": True,
             "guild_id": gid,
             "bot_id": bid,
-            "groups": [],
+            "groups": snap.get("groups") or [],
             "ready": False,
-            "error": str(e),
+            "intent_level": level,
+            "error": hint,
         }
     people = [
         {
@@ -263,13 +282,15 @@ def list_members(bot_id: str = "") -> dict[str, Any]:
             "bot_id": bid,
             "groups": [],
             "ready": False,
-            "error": "No members returned — enable Server Members Intent in the Dev Portal, then restart.",
+            "intent_level": level,
+            "error": _members_intent_hint("", level),
         }
     return {
         "ok": True,
         "guild_id": gid,
         "bot_id": bid,
         "ready": True,
+        "intent_level": level,
         "groups": [
             {
                 "id": "members",

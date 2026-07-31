@@ -123,9 +123,11 @@
   }
   .link { color: var(--accent); text-decoration: none; word-break: break-all; }
   .link:hover { text-decoration: underline; }
+  #composer-wrap {
+    flex: 0 0 auto; border-top: 1px solid var(--border); background: var(--bg);
+  }
   #composer {
-    display: flex; gap: 8px; padding: 10px 12px;
-    border-top: 1px solid var(--border); background: var(--bg); flex: 0 0 auto;
+    display: flex; gap: 8px; padding: 10px 12px 6px;
   }
   #composer input {
     flex: 1; border: 1px solid transparent; border-radius: 8px;
@@ -137,8 +139,13 @@
     padding: 0 14px; cursor: pointer; font: inherit; font-weight: 600;
   }
   #composer button:disabled { opacity: 0.45; cursor: default; }
+  #composer-status {
+    min-height: 16px; padding: 0 14px 8px; font-size: 12px; color: var(--dim);
+  }
+  #composer-status.err { color: #ffb4b4; }
   .empty, .err { color: var(--dim); padding: 24px; text-align: center; }
   .err { color: #ffb4b4; }
+  #member-list .err { padding: 12px; text-align: left; font-size: 12px; line-height: 1.35; }
   @media (max-width: 720px) {
     #app { grid-template-columns: 140px 1fr; }
     #members { display: none; }
@@ -157,10 +164,13 @@
       <div id="channel-title"># select a channel</div>
     </div>
     <div id="msgs"><div class="empty">Select a bot and channel to chat.</div></div>
-    <form id="composer">
-      <input id="text" placeholder="Message…" autocomplete="off" />
-      <button type="submit" id="send-btn">Send</button>
-    </form>
+    <div id="composer-wrap">
+      <form id="composer">
+        <input id="text" placeholder="Message…" autocomplete="off" />
+        <button type="submit" id="send-btn">Send</button>
+      </form>
+      <div id="composer-status"></div>
+    </div>
   </main>
   <aside id="members">
     <div class="col-title">Members</div>
@@ -171,6 +181,7 @@
 (function () {
   var CHANNEL = "uefn-plugin-ui";
   var POLL_MS = 3500;
+  var MEMBERS_POLL_MS = 12000;
   var GROUP_WINDOW_MS = 7 * 60 * 1000;
   var RELAY_RE = /^\*\*([^*\n]{1,64}?):\*\*[ \t]?([\s\S]*)$/;
   var INLINE_TOKEN_RE =
@@ -207,6 +218,7 @@
   var channelName = "";
   var lastId = "";
   var pollTimer = null;
+  var membersTimer = null;
   var sending = false;
   var seenIds = Object.create(null);
   var viewMsgs = [];
@@ -219,6 +231,13 @@
   var title = document.getElementById("channel-title");
   var textInput = document.getElementById("text");
   var sendBtn = document.getElementById("send-btn");
+  var composerStatus = document.getElementById("composer-status");
+
+  function setComposerStatus(text, isErr) {
+    if (!composerStatus) return;
+    composerStatus.textContent = text || "";
+    composerStatus.className = isErr ? "err" : "";
+  }
 
   function escapeHtml(s) {
     return String(s || "").replace(/[&<>"']/g, function (c) {
@@ -570,12 +589,14 @@
         channelList.appendChild(btn);
       });
       loadMembers();
+      startMembersPoll();
     });
   }
 
   function openChannel(id, name) {
     channelId = id;
     channelName = name || id;
+    setComposerStatus("", false);
     title.textContent = "#" + channelName;
     lastId = "";
     seenIds = Object.create(null);
@@ -607,40 +628,69 @@
       });
   }
 
-  function loadMembers() {
-    memberList.innerHTML = '<div class="empty">Loading…</div>';
+  function renderMemberGroups(groups, hint) {
+    memberList.innerHTML = "";
+    if (!groups || !groups.length) {
+      memberList.innerHTML =
+        '<div class="err">' + escapeHtml(hint || "No members") + "</div>";
+      return;
+    }
+    groups.forEach(function (g) {
+      var t = document.createElement("div");
+      t.className = "col-title";
+      t.textContent =
+        (g.name || "Members") + " — " + (g.count || (g.members || []).length);
+      memberList.appendChild(t);
+      (g.members || []).forEach(function (m) {
+        var el = document.createElement("div");
+        el.className = "item";
+        el.textContent = m.name || m.id;
+        memberList.appendChild(el);
+      });
+    });
+    if (hint) {
+      var note = document.createElement("div");
+      note.className = "err";
+      note.textContent = hint;
+      memberList.appendChild(note);
+    }
+  }
+
+  function loadMembers(quiet) {
+    if (!botId) {
+      memberList.innerHTML = '<div class="empty">Select a bot</div>';
+      return;
+    }
+    if (!quiet) memberList.innerHTML = '<div class="empty">Loading…</div>';
     rpc("list_members", { bot_id: botId })
       .then(function (res) {
-        memberList.innerHTML = "";
         if (!res || res.ok === false) {
           memberList.innerHTML =
             '<div class="err">' + escapeHtml((res && res.error) || "—") + "</div>";
           return;
         }
-        var groups = res.groups || [];
-        if (!groups.length) {
-          memberList.innerHTML =
-            '<div class="empty">' + escapeHtml(res.error || "No members") + "</div>";
-          return;
-        }
-        groups.forEach(function (g) {
-          var t = document.createElement("div");
-          t.className = "col-title";
-          t.textContent =
-            (g.name || "Members") + " — " + (g.count || (g.members || []).length);
-          memberList.appendChild(t);
-          (g.members || []).forEach(function (m) {
-            var el = document.createElement("div");
-            el.className = "item";
-            el.textContent = m.name || m.id;
-            memberList.appendChild(el);
-          });
-        });
+        renderMemberGroups(res.groups || [], res.error || "");
       })
       .catch(function (e) {
-        memberList.innerHTML =
-          '<div class="err">' + escapeHtml(e.message || e) + "</div>";
+        if (!quiet) {
+          memberList.innerHTML =
+            '<div class="err">' + escapeHtml(e.message || e) + "</div>";
+        }
       });
+  }
+
+  function startMembersPoll() {
+    stopMembersPoll();
+    membersTimer = window.setInterval(function () {
+      loadMembers(true);
+    }, MEMBERS_POLL_MS);
+  }
+
+  function stopMembersPoll() {
+    if (membersTimer) {
+      window.clearInterval(membersTimer);
+      membersTimer = null;
+    }
   }
 
   botSelect.onchange = function () {
@@ -664,27 +714,51 @@
   document.getElementById("composer").onsubmit = function (ev) {
     ev.preventDefault();
     var text = textInput.value.trim();
-    if (!text || !channelId || !botId || sending) return;
+    if (sending) return;
+    if (!botId) {
+      setComposerStatus("Select a bot first", true);
+      return;
+    }
+    if (!channelId) {
+      setComposerStatus("Select a channel first", true);
+      return;
+    }
+    if (!text) {
+      setComposerStatus("Type a message", true);
+      return;
+    }
     sending = true;
     sendBtn.disabled = true;
+    setComposerStatus("Sending…", false);
     textInput.value = "";
     rpc("send", { channel_id: channelId, text: text, bot_id: botId })
       .then(function (res) {
-        if (res && res.ok && res.message) {
-          ingestMessages([res.message], true);
-          msgs.scrollTop = msgs.scrollHeight;
-        } else if (res && res.error) {
-          var err = document.createElement("div");
-          err.className = "err";
-          err.textContent = res.error;
-          msgs.appendChild(err);
+        if (res && res.ok) {
+          setComposerStatus("", false);
+          if (res.message) {
+            ingestMessages([res.message], true);
+            msgs.scrollTop = msgs.scrollHeight;
+          }
+          return;
         }
+        textInput.value = text;
+        var err = (res && res.error) || "Send failed";
+        setComposerStatus(err, true);
+        var el = document.createElement("div");
+        el.className = "err";
+        el.textContent = err;
+        msgs.appendChild(el);
+        msgs.scrollTop = msgs.scrollHeight;
       })
       .catch(function (e) {
-        var err = document.createElement("div");
-        err.className = "err";
-        err.textContent = String(e.message || e);
-        msgs.appendChild(err);
+        textInput.value = text;
+        var err = String(e.message || e);
+        setComposerStatus(err, true);
+        var el = document.createElement("div");
+        el.className = "err";
+        el.textContent = err;
+        msgs.appendChild(el);
+        msgs.scrollTop = msgs.scrollHeight;
       })
       .then(function () {
         sending = false;
