@@ -11,6 +11,10 @@ Install or update from **Settings → Store** in the app — do not install from
 For a full member list and Online/Offline status, enable **Server Members Intent** and
 **Presence Intent** on the bot in the Discord Developer Portal (Bot → Privileged Gateway Intents).
 
+**Show offline** disconnects the presence gateway so Discord lists the bot Offline (guild
+`!commands` still work via REST). **DMs / whispers** need the bot Online (gateway up) —
+toggle Show offline off, Save, then message the bot.
+
 ## Build
 
 ```bash

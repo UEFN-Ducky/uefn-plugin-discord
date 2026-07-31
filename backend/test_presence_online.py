@@ -26,9 +26,11 @@ def test_intent_ladder_and_basic_flag() -> None:
     with presence._lock:
         presence._basic_intents_bots.discard(bid)
         presence._intent_level.pop(bid, None)
-    assert presence._INTENTS_BASIC == 1 << 0
-    assert presence._INTENTS_MEMBERS == (1 << 0) | (1 << 1)
+    assert presence._INTENTS_DM == 1 << 12
+    assert presence._INTENTS_BASIC == (1 << 0) | presence._INTENTS_DM
+    assert presence._INTENTS_MEMBERS == (1 << 0) | (1 << 1) | presence._INTENTS_DM
     assert presence._INTENTS_FULL & (1 << 8)  # GUILD_PRESENCES bit
+    assert presence._INTENTS_FULL & presence._INTENTS_DM
     with presence._lock:
         presence._intent_level[bid] = presence._LEVEL_MEMBERS
     assert presence.intent_level(bid) == presence._LEVEL_MEMBERS

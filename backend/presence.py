@@ -1,10 +1,13 @@
 """Discord Gateway: bot Online + guild member/presence cache for the sidebar.
 
-REST still owns channel messages (poller). This websocket:
-  1. Keeps the bot green (IDENTIFY presence).
+REST still owns guild channel messages (poller). This websocket:
+  1. Keeps the bot green (IDENTIFY presence) — or stays disconnected when
+     ``show_offline`` is on (invisible-while-connected is flaky for bots).
   2. With GUILDS | GUILD_MEMBERS | GUILD_PRESENCES, caches roles + members +
      status so the panel can render Discord's member list (hoisted roles,
      Offline accordion).
+  3. With DIRECT_MESSAGES, handles DM ``MESSAGE_CREATE`` so ``!bob`` whispers
+     work (content hydrated via REST).
 
 Requires Server Members Intent + Presence Intent ON in the Dev Portal.
 
@@ -31,11 +34,13 @@ _RECONNECT_MIN_S = 5.0
 _RECONNECT_MAX_S = 120.0
 
 # GUILDS alone is enough to hold an IDENTIFY session and show the bot Online.
-# Privileged intents power the member sidebar; Discord closes with 4014 if they
-# are requested without Dev Portal toggles — fall back: FULL → MEMBERS → BASIC.
-_INTENTS_BASIC = 1 << 0  # GUILDS
-_INTENTS_MEMBERS = (1 << 0) | (1 << 1)  # GUILDS | GUILD_MEMBERS
-_INTENTS_FULL = (1 << 0) | (1 << 1) | (1 << 8)  # + GUILD_PRESENCES
+# DIRECT_MESSAGES lets DM !commands reach us; privileged intents power the
+# member sidebar. Discord closes with 4014 if privileged intents are requested
+# without Dev Portal toggles — fall back: FULL → MEMBERS → BASIC.
+_INTENTS_DM = 1 << 12  # DIRECT_MESSAGES (not privileged)
+_INTENTS_BASIC = (1 << 0) | _INTENTS_DM  # GUILDS | DMs
+_INTENTS_MEMBERS = (1 << 0) | (1 << 1) | _INTENTS_DM  # + GUILD_MEMBERS
+_INTENTS_FULL = (1 << 0) | (1 << 1) | (1 << 8) | _INTENTS_DM  # + PRESENCES
 _CLOSE_DISALLOWED_INTENTS = 4014
 _PRESENCE_REFRESH_S = 240.0  # re-assert Online so Discord doesn't drop the dot
 
@@ -62,10 +67,19 @@ _bot_user_ids: dict[str, str] = {}
 _cache: dict[tuple[str, str], dict[str, Any]] = {}
 
 
-def desired_presence_status(bot_id: str) -> str:
-    """Discord presence status for this bot: online unless show_offline is set."""
+def _wants_offline(bot_id: str) -> bool:
     profile = _bots.get_bot(bot_id)
-    if profile is not None and bool(getattr(profile, "show_offline", False)):
+    return profile is not None and bool(getattr(profile, "show_offline", False))
+
+
+def desired_presence_status(bot_id: str) -> str:
+    """Discord presence status for this bot: online unless show_offline is set.
+
+    When show_offline is on we park the gateway (see ``_run``) — Discord only
+    reliably lists bots Offline when they are not connected. ``invisible`` is
+    kept for IDENTIFY/tests; live sessions disconnect instead.
+    """
+    if _wants_offline(bot_id):
         return "invisible"
     return "online"
 
@@ -449,6 +463,38 @@ def _request_members(sock: ssl.SSLSocket, guild_id: str, *, want_presences: bool
     )
 
 
+def _handle_dm_create(bot_id: str, data: Any) -> None:
+    """Run !commands from Discord DMs (guild chat stays on the REST poller)."""
+    if not isinstance(data, dict):
+        return
+    # Guild messages have guild_id; DMs / group DMs do not.
+    if data.get("guild_id"):
+        return
+    author = data.get("author") if isinstance(data.get("author"), dict) else {}
+    if author.get("bot"):
+        return
+    cid = str(data.get("channel_id") or "").strip()
+    mid = str(data.get("id") or "").strip()
+    if not cid or not mid:
+        return
+
+    def _work() -> None:
+        try:
+            from . import client, commands
+
+            try:
+                msg = client.get_message(cid, mid, bot_id=bot_id)
+            except client.DiscordError:
+                msg = client._normalize_message(data)  # noqa: SLF001 — gateway fallback
+            commands.maybe_handle(msg, cid, bot_id=bot_id)
+        except Exception:
+            pass
+
+    threading.Thread(
+        target=_work, daemon=True, name=f"discord-dm-{bot_id}-{mid[-6:]}"
+    ).start()
+
+
 def _handle_dispatch(sock: ssl.SSLSocket, event: str, data: Any, *, bot_id: str) -> None:
     want = (_bots.get_guild_id(bot_id) or "").strip()
     if event == "GUILD_CREATE" and isinstance(data, dict):
@@ -626,6 +672,9 @@ def _session(token: str, bot_id: str, *, intents: int) -> int:
             profile = _bots.get_bot(bot_id)
             if profile is not None and not profile.enabled:
                 return 0
+            # show_offline → drop the socket so Discord lists the bot Offline.
+            if _wants_offline(bot_id):
+                return 0
             now = time.monotonic()
             if now >= next_beat:
                 _send_json(sock, {"op": 1, "d": seq})
@@ -667,7 +716,9 @@ def _session(token: str, bot_id: str, *, intents: int) -> int:
                 return close_code
             elif gw_op == 0:
                 event = str(msg.get("t") or "")
-                # Messages stay on the poller; ignore MESSAGE_* here.
+                if event == "MESSAGE_CREATE":
+                    _handle_dm_create(bot_id, msg.get("d"))
+                    continue
                 if event.startswith("MESSAGE_"):
                     continue
                 if event == "READY":
@@ -677,6 +728,9 @@ def _session(token: str, bot_id: str, *, intents: int) -> int:
                     if uid:
                         with _lock:
                             _bot_user_ids[bot_id] = uid
+                    # If Save flipped show_offline during IDENTIFY, leave now.
+                    if _wants_offline(bot_id):
+                        return 0
                     try:
                         _send_presence_update(sock, bot_id)
                     except OSError:
@@ -701,6 +755,27 @@ def set_plugin_active(active: bool) -> None:
         _plugin_active = bool(active)
 
 
+def _park_until_online(bot_id: str) -> None:
+    """Stay disconnected while show_offline is on; wake on bump or toggle off."""
+    _mark_self_status(bot_id, "invisible")
+    for _ in range(60):
+        time.sleep(1.0)
+        with _lock:
+            if not _plugin_active:
+                return
+            if bot_id in _presence_bump:
+                _presence_bump.discard(bot_id)
+                if not _wants_offline(bot_id):
+                    return
+                # Still offline — bump was a no-op re-save; keep parking.
+                continue
+        if not _wants_offline(bot_id):
+            return
+        profile = _bots.get_bot(bot_id)
+        if profile is not None and not profile.enabled:
+            return
+
+
 def _run(bot_id: str) -> None:
     backoff = _RECONNECT_MIN_S
     while True:
@@ -713,6 +788,11 @@ def _run(bot_id: str) -> None:
         profile = _bots.get_bot(bot_id)
         if profile is not None and not profile.enabled:
             time.sleep(30.0)
+            continue
+        # Offline mode: do not hold a gateway session (invisible status sticks poorly).
+        if _wants_offline(bot_id):
+            _park_until_online(bot_id)
+            backoff = _RECONNECT_MIN_S
             continue
         token = _client_get_token(bot_id)
         if not token:
@@ -732,6 +812,10 @@ def _run(bot_id: str) -> None:
             close_code = _session(token, bot_id, intents=intents)
         except Exception:
             close_code = 0
+        # If Save flipped show_offline, park immediately (no reconnect backoff).
+        if _wants_offline(bot_id):
+            backoff = _RECONNECT_MIN_S
+            continue
         if close_code == _CLOSE_DISALLOWED_INTENTS and level > _LEVEL_BASIC:
             # Drop one privileged intent at a time (Presence first, then Members).
             with _lock:

@@ -539,6 +539,20 @@ def fetch_messages(
     return out
 
 
+def get_message(
+    channel_id: str, message_id: str, *, bot_id: str | None = None
+) -> dict[str, Any]:
+    """Fetch one message by id (used to hydrate DM gateway events)."""
+    cid = (channel_id or "").strip()
+    mid = (message_id or "").strip()
+    if not cid or not mid:
+        raise DiscordError("channel_id and message_id are required")
+    raw = _request(
+        "GET", f"/channels/{cid}/messages/{mid}", bot_id=bot_id or DEFAULT_BOT_ID
+    )
+    return _normalize_message(raw or {})
+
+
 def send_message(channel_id: str, text: str, *, bot_id: str | None = None) -> dict[str, Any]:
     """Post a message to a channel as the bot. Returns the created message (normalized)."""
     cid = (channel_id or "").strip()
