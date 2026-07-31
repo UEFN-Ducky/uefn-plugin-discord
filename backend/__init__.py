@@ -62,9 +62,10 @@ def _start_runtime_safe(log_fn: Any) -> None:
 def _start_runtime() -> None:
     from . import poller, presence
 
-    # Drop orphan pollers from a previous register() before starting fresh.
+    # Drop orphan pollers from a previous register()/module load (sys registry +
+    # generation bump) before starting fresh — module-local state alone misses them.
     try:
-        poller.stop_all(join_timeout_s=1.5)
+        poller.stop_all(join_timeout_s=2.5)
     except Exception:
         pass
     presence.set_plugin_active(True)

@@ -56,12 +56,21 @@ def _seen_store() -> dict[str, Any]:
     return store
 
 
-def _claim_message(bot_id: str, message_id: str) -> bool:
-    """True once per (bot_id, message_id). Empty id always claims (no dedupe)."""
+def _claim_message(message_id: str, *, channel_id: str = "", content: str = "") -> bool:
+    """True once per Discord message. Ids are global snowflakes — ignore bot_id.
+
+    Empty id falls back to a short-lived content fingerprint so concurrent
+    orphan pollers still cannot multi-reply the same ``!bob``.
+    """
     mid = (message_id or "").strip()
-    if not mid:
-        return True
-    key = f"{bot_id}\0{mid}"
+    if mid:
+        key = f"id:{mid}"
+    else:
+        # Best-effort: same channel + body within the seen window.
+        body = (content or "").strip().lower()
+        if not body:
+            return True
+        key = f"fp:{(channel_id or '').strip()}\0{body}"
     store = _seen_store()
     with store["lock"]:
         seen: set[str] = store["set"]
@@ -89,7 +98,11 @@ def maybe_handle(message: dict[str, Any], channel_id: str, *, bot_id: str | None
     if not (text_l == prefix_l or text_l.startswith(prefix_l + " ")):
         return False
     # Claim before any side effect so orphan pollers / double-emits cannot multi-reply.
-    if not _claim_message(bid, str(message.get("id") or "")):
+    if not _claim_message(
+        str(message.get("id") or ""),
+        channel_id=channel_id,
+        content=text,
+    ):
         return False
     rest_raw = text[len(prefix) :]
     whoami_rest = rest_raw.strip().lower()
