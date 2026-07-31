@@ -4,20 +4,16 @@
 <meta charset="utf-8" />
 <title>Discord Ducky</title>
 <style>
-  :root {
-    --bg: #313338;
-    --sidebar: #2b2d31;
-    --border: rgba(0, 0, 0, 0.3);
-    --text: #dbdee1;
-    --dim: #949ba4;
-    --accent: #5865f2;
-    --input: #383a40;
-    --hover: rgba(255, 255, 255, 0.04);
-  }
+  /* Colors come from host Appearance (theme.get / appearance_theme). No hardcoded theme. */
   * { box-sizing: border-box; }
   html, body {
-    margin: 0; height: 100%; background: var(--bg); color: var(--text);
-    font: 13px/1.4 "Segoe UI", system-ui, sans-serif; overflow: hidden;
+    margin: 0; height: 100%;
+    background: var(--groupchat-bg, var(--bg));
+    color: var(--fg, var(--text));
+    font-family: var(--font-ui, "Segoe UI", system-ui, sans-serif);
+    font-size: var(--font-ui-size, 13px);
+    line-height: 1.4;
+    overflow: hidden;
   }
   #app {
     display: grid;
@@ -25,7 +21,7 @@
     height: 100%;
   }
   aside {
-    background: color-mix(in srgb, var(--sidebar) 92%, #fff 2%);
+    background: var(--sidebar);
     border-right: 1px solid var(--border);
     overflow: auto;
     padding: 10px 8px;
@@ -37,18 +33,22 @@
   #members { border-right: none; border-left: 1px solid var(--border); }
   .col-title {
     font-size: 10.5px; font-weight: 600; text-transform: uppercase;
-    letter-spacing: 0.07em; color: var(--dim); padding: 2px 8px 8px;
+    letter-spacing: 0.07em; color: var(--fg-dim, var(--muted)); padding: 2px 8px 8px;
   }
   .item {
     display: flex; align-items: center; gap: 5px; width: 100%;
     text-align: left; border: none; background: transparent;
-    color: var(--dim); padding: 5px 8px; border-radius: 7px;
+    color: var(--fg-dim, var(--muted)); padding: 5px 8px;
+    border-radius: var(--radius-sm, 7px);
     cursor: pointer; font: inherit; font-size: 12.5px;
   }
-  .item:hover { background: var(--hover); color: var(--text); }
+  .item:hover {
+    background: var(--groupchat-hover, var(--tab-hover));
+    color: var(--fg, var(--text));
+  }
   .item.active {
-    background: color-mix(in srgb, var(--accent) 18%, transparent);
-    color: var(--text); font-weight: 600;
+    background: color-mix(in srgb, var(--groupchat-accent, var(--accent)) 18%, transparent);
+    color: var(--fg, var(--text)); font-weight: 600;
   }
   .item .hash { opacity: 0.45; flex: 0 0 auto; }
   main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -57,8 +57,10 @@
     border-bottom: 1px solid var(--border); flex: 0 0 auto;
   }
   #toolbar select {
-    background: var(--input); color: var(--text); border: 1px solid var(--border);
-    border-radius: 6px; padding: 4px 8px; font: inherit; max-width: 160px;
+    background: var(--input-bg, var(--btn-bg));
+    color: var(--fg, var(--text));
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm, 6px); padding: 4px 8px; font: inherit; max-width: 160px;
   }
   #channel-title {
     font-weight: 600; flex: 1; min-width: 0;
@@ -74,23 +76,24 @@
   }
   .day::before, .day::after {
     content: ""; flex: 1 1 auto; height: 1px;
-    background: rgba(127, 127, 127, 0.2);
+    background: var(--border);
   }
   .day-label {
     flex: 0 0 auto; font-size: 10.5px; font-weight: 600;
-    letter-spacing: 0.03em; color: var(--dim);
+    letter-spacing: 0.03em; color: var(--groupchat-time, var(--fg-dim, var(--muted)));
   }
   .msg {
     display: grid; grid-template-columns: 52px 1fr; column-gap: 8px;
     align-items: start; padding: 0 12px 0 8px;
-    font-family: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
-    font-size: 12.5px; line-height: 1.45;
+    font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+    font-size: var(--font-mono-size, 12.5px); line-height: 1.45;
   }
-  .msg:hover { background: var(--hover); }
+  .msg:hover { background: var(--groupchat-hover, var(--tab-hover)); }
   .msg.is-first { margin-top: 4px; padding-top: 1px; }
   .msg.is-followup .who { display: none; }
   .gutter {
-    font-size: 11px; color: var(--dim); text-align: right; padding-top: 1px;
+    font-size: 11px; color: var(--groupchat-time, var(--fg-dim, var(--muted)));
+    text-align: right; padding-top: 1px;
     opacity: 0.75; user-select: none; font-variant-numeric: tabular-nums;
   }
   .who { margin-bottom: 0; }
@@ -98,53 +101,63 @@
     font-weight: 700; margin-right: 4px;
     color: hsl(var(--nick-h, 230) 62% 72%);
   }
-  .msg.is-bot .nick { color: var(--accent); }
+  .msg.is-bot .nick { color: var(--groupchat-accent, var(--accent)); }
   .tag {
     font-size: 9px; font-weight: 700; letter-spacing: 0.04em;
-    color: var(--accent); margin-right: 4px; white-space: nowrap;
+    color: var(--groupchat-accent, var(--accent)); margin-right: 4px; white-space: nowrap;
   }
   .relay {
-    font-size: 10px; color: var(--dim); margin-right: 4px; white-space: nowrap;
+    font-size: 10px; color: var(--fg-dim, var(--muted)); margin-right: 4px; white-space: nowrap;
   }
-  .body { white-space: pre-wrap; word-break: break-word; color: var(--text); }
+  .body { white-space: pre-wrap; word-break: break-word; color: var(--fg, var(--text)); }
   .body.is-jumbo { font-size: 26px; line-height: 1.25; }
   .emoji {
     width: 20px; height: 20px; object-fit: contain; vertical-align: -4px;
   }
   .body.is-jumbo .emoji { width: 30px; height: 30px; vertical-align: -6px; }
   .code {
-    font-family: ui-monospace, Consolas, monospace; font-size: 12px;
-    background: rgba(255, 255, 255, 0.08); border-radius: 4px; padding: 1px 4px;
+    font-family: var(--font-mono, ui-monospace, Consolas, monospace); font-size: 12px;
+    background: color-mix(in srgb, var(--fg, var(--text)) 10%, transparent);
+    border-radius: 4px; padding: 1px 4px;
   }
   .mention {
-    color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    color: var(--groupchat-accent, var(--accent));
+    background: color-mix(in srgb, var(--groupchat-accent, var(--accent)) 14%, transparent);
     border-radius: 4px; padding: 0 3px; font-weight: 500;
   }
-  .link { color: var(--accent); text-decoration: none; word-break: break-all; }
+  .link { color: var(--groupchat-accent, var(--accent)); text-decoration: none; word-break: break-all; }
   .link:hover { text-decoration: underline; }
   #composer-wrap {
-    flex: 0 0 auto; border-top: 1px solid var(--border); background: var(--bg);
+    flex: 0 0 auto; border-top: 1px solid var(--border);
+    background: var(--groupchat-bg, var(--bg));
   }
   #composer {
     display: flex; gap: 8px; padding: 10px 12px 6px;
   }
   #composer input {
-    flex: 1; border: 1px solid transparent; border-radius: 8px;
-    background: var(--input); color: var(--text); padding: 10px 12px; font: inherit;
+    flex: 1; border: 1px solid transparent;
+    border-radius: var(--radius-sm, 8px);
+    background: var(--groupchat-composer-bg, var(--input-bg, var(--btn-bg)));
+    color: var(--fg, var(--text)); padding: 10px 12px; font: inherit;
   }
-  #composer input:focus { outline: none; border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+  #composer input:focus {
+    outline: none;
+    border-color: color-mix(in srgb, var(--groupchat-accent, var(--accent)) 50%, transparent);
+  }
   #composer button {
-    border: none; border-radius: 8px; background: var(--accent); color: #fff;
+    border: none; border-radius: var(--radius-sm, 8px);
+    background: var(--groupchat-accent, var(--accent));
+    color: var(--fg-inverse);
     padding: 0 14px; cursor: pointer; font: inherit; font-weight: 600;
   }
   #composer button:disabled { opacity: 0.45; cursor: default; }
   #composer-status {
-    min-height: 16px; padding: 0 14px 8px; font-size: 12px; color: var(--dim);
+    min-height: 16px; padding: 0 14px 8px; font-size: 12px;
+    color: var(--fg-dim, var(--muted));
   }
-  #composer-status.err { color: #ffb4b4; }
-  .empty, .err { color: var(--dim); padding: 24px; text-align: center; }
-  .err { color: #ffb4b4; }
+  #composer-status.err { color: var(--danger, var(--red)); }
+  .empty, .err { color: var(--fg-dim, var(--muted)); padding: 24px; text-align: center; }
+  .err { color: var(--danger, var(--red)); }
   #member-list .err { padding: 12px; text-align: left; font-size: 12px; line-height: 1.35; }
   @media (max-width: 720px) {
     #app { grid-template-columns: 140px 1fr; }
@@ -209,6 +222,22 @@
   }
   function rpc(method, params) {
     return call("plugin.call", { method: method, params: params || {} });
+  }
+
+  function applyAppearance(vars) {
+    if (!vars || typeof vars !== "object") return;
+    var root = document.documentElement;
+    Object.keys(vars).forEach(function (k) {
+      if (vars[k] == null || vars[k] === "") return;
+      root.style.setProperty("--" + k, String(vars[k]));
+    });
+  }
+  function pullTheme() {
+    return call("theme.get")
+      .then(function (res) {
+        if (res && res.vars) applyAppearance(res.vars);
+      })
+      .catch(function () {});
   }
 
   var botId = "";
@@ -771,11 +800,16 @@
   window.addEventListener("message", function (ev) {
     var d = ev.data;
     if (!d || d.channel !== CHANNEL || !d.event) return;
+    if (d.event.type === "appearance_theme" && d.event.vars) {
+      applyAppearance(d.event.vars);
+      return;
+    }
     if (d.event.type === "discord_changed") {
       loadBots();
     }
   });
 
+  pullTheme();
   loadBots();
 })();
 </script>

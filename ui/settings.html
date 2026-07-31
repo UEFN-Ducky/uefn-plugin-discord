@@ -4,26 +4,23 @@
 <meta charset="utf-8" />
 <title>Discord settings</title>
 <style>
+  /* Colors from host Appearance (theme.get / appearance_theme). No hardcoded theme. */
   :root {
     --pad-x: 30px;
     --pad-y: 30px;
-    --bg: #121214;
-    --surface: #1c1c20;
-    --border: rgba(255, 255, 255, 0.1);
-    --text: #e8e8ec;
-    --muted: #9a9aa2;
-    --accent: #5865f2;
-    --danger: #ed4245;
-    --ok: #57f287;
-    --input: rgba(255, 255, 255, 0.06);
   }
   @media (max-width: 720px) {
     :root { --pad-x: 16px; --pad-y: 20px; }
   }
   * { box-sizing: border-box; }
   html, body {
-    margin: 0; height: 100%; background: var(--bg); color: var(--text);
-    font: 13px/1.45 "Segoe UI", system-ui, sans-serif; overflow: hidden;
+    margin: 0; height: 100%;
+    background: var(--bg);
+    color: var(--fg, var(--text));
+    font-family: var(--font-settings, var(--font-ui, "Segoe UI", system-ui, sans-serif));
+    font-size: var(--font-ui-size, 13px);
+    line-height: 1.45;
+    overflow: hidden;
   }
   #app {
     position: relative; display: flex; flex-direction: column;
@@ -60,12 +57,12 @@
   .header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .section { display: flex; flex-direction: column; gap: 12px; }
   .section-title {
-    margin: 0; font-size: 18px; font-weight: 600; color: var(--text);
+    margin: 0; font-size: 18px; font-weight: 600; color: var(--fg, var(--text));
   }
-  .section-desc { margin: 0; font-size: 13px; line-height: 1.55; color: var(--muted); max-width: 42rem; }
+  .section-desc { margin: 0; font-size: 13px; line-height: 1.55; color: var(--muted, var(--fg-dim)); max-width: 42rem; }
   .toggle-card {
-    border: 1px solid var(--border); border-radius: 12px;
-    background: color-mix(in srgb, var(--surface) 55%, var(--bg));
+    border: 1px solid var(--border); border-radius: var(--radius, 12px);
+    background: color-mix(in srgb, var(--card) 55%, var(--bg));
     overflow: hidden;
   }
   .toggle-row {
@@ -75,25 +72,27 @@
   .toggle-row + .toggle-row { border-top: 1px solid var(--border); }
   .toggle-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   .toggle-label { font-size: 14px; font-weight: 600; }
-  .toggle-desc { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+  .toggle-desc { font-size: 12.5px; color: var(--muted, var(--fg-dim)); line-height: 1.45; }
   .switch {
     position: relative; width: 40px; height: 22px; flex-shrink: 0; margin-top: 2px;
   }
   .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
   .switch span {
     position: absolute; inset: 0; border-radius: 999px; cursor: pointer;
-    background: rgba(255,255,255,0.12); transition: background 0.15s ease;
+    background: color-mix(in srgb, var(--fg, var(--text)) 12%, transparent);
+    transition: background 0.15s ease;
   }
   .switch span::after {
     content: ""; position: absolute; width: 16px; height: 16px; border-radius: 50%;
-    left: 3px; top: 3px; background: #fff; transition: transform 0.15s ease;
+    left: 3px; top: 3px; background: var(--fg-inverse, var(--fg)); transition: transform 0.15s ease;
   }
   .switch input:checked + span { background: var(--accent); }
   .switch input:checked + span::after { transform: translateX(18px); }
   .rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
   .row {
     display: flex; align-items: stretch; border: 1px solid var(--border);
-    border-radius: 12px; background: color-mix(in srgb, var(--surface) 55%, var(--bg));
+    border-radius: var(--radius, 12px);
+    background: color-mix(in srgb, var(--card) 55%, var(--bg));
     overflow: hidden;
   }
   .row.is-selected { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
@@ -102,7 +101,7 @@
     padding: 14px 16px; border: 0; background: transparent; color: inherit;
     text-align: left; cursor: pointer; font: inherit;
   }
-  .row-open:hover { background: color-mix(in srgb, var(--surface) 80%, transparent); }
+  .row-open:hover { background: color-mix(in srgb, var(--card-hover, var(--card)) 80%, transparent); }
   .row-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
   .row-title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   .row-title { font-size: 15px; font-weight: 700; }
@@ -112,56 +111,58 @@
     background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent);
   }
   .badge.off {
-    background: rgba(255,255,255,0.08); color: var(--muted);
+    background: color-mix(in srgb, var(--fg, var(--text)) 8%, transparent);
+    color: var(--muted, var(--fg-dim));
   }
   .badge.warn {
-    background: color-mix(in srgb, #faa61a 22%, transparent); color: #faa61a;
+    background: color-mix(in srgb, var(--warn, var(--amber)) 22%, transparent);
+    color: var(--warn, var(--amber));
   }
-  .row-meta { font-size: 12px; color: var(--muted); }
-  .row-overview { font-size: 12.5px; color: var(--muted); }
+  .row-meta { font-size: 12px; color: var(--muted, var(--fg-dim)); }
+  .row-overview { font-size: 12.5px; color: var(--muted, var(--fg-dim)); }
   .row-actions {
     display: flex; align-items: center; gap: 4px; padding: 8px 10px;
     border-left: 1px solid var(--border); flex-shrink: 0;
   }
   button, .btn {
-    border: 1px solid var(--border); background: var(--surface); color: var(--text);
-    border-radius: 8px; padding: 7px 12px; cursor: pointer; font: inherit;
+    border: 1px solid var(--border); background: var(--card); color: var(--fg, var(--text));
+    border-radius: var(--radius-sm, 8px); padding: 7px 12px; cursor: pointer; font: inherit;
   }
-  button:hover { border-color: rgba(255,255,255,0.22); }
-  button.primary { background: var(--accent); border-color: transparent; color: #fff; }
-  button.danger { background: transparent; border-color: var(--danger); color: #ffb4b4; }
+  button:hover { border-color: var(--border-light, var(--border)); background: var(--btn-hover, var(--card-hover)); }
+  button.primary { background: var(--accent); border-color: transparent; color: var(--fg-inverse); }
+  button.danger { background: transparent; border-color: var(--danger, var(--red)); color: var(--danger, var(--red)); }
   button.ghost {
     width: 32px; height: 32px; padding: 0; display: inline-flex;
     align-items: center; justify-content: center; background: transparent;
   }
   .icon-btn { width: 34px; height: 34px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
-  .status { font-size: 12px; color: var(--muted); min-height: 1.2em; }
-  .status.ok { color: var(--ok); }
-  .status.err { color: #ffb4b4; }
+  .status { font-size: 12px; color: var(--muted, var(--fg-dim)); min-height: 1.2em; }
+  .status.ok { color: var(--green); }
+  .status.err { color: var(--danger, var(--red)); }
   .empty {
-    border: 1px dashed var(--border); border-radius: 12px; padding: 28px 18px;
-    text-align: center; color: var(--muted);
+    border: 1px dashed var(--border); border-radius: var(--radius, 12px); padding: 28px 18px;
+    text-align: center; color: var(--muted, var(--fg-dim));
   }
   .detail-head {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
     padding: 10px var(--pad-x); border-bottom: 1px solid var(--border);
     background: color-mix(in srgb, var(--bg) 78%, transparent);
-    backdrop-filter: blur(12px); flex-shrink: 0;
+    backdrop-filter: var(--blur-md, blur(12px)); flex-shrink: 0;
   }
   .detail-head-left { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
   .detail-head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .crumb { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .crumb strong { color: var(--text); font-weight: 600; }
+  .crumb { font-size: 12px; color: var(--muted, var(--fg-dim)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .crumb strong { color: var(--fg, var(--text)); font-weight: 600; }
   .form-grid {
     display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
   }
   .form-grid .full { grid-column: 1 / -1; }
-  label { display: grid; gap: 5px; font-size: 12px; color: var(--muted); }
+  label { display: grid; gap: 5px; font-size: 12px; color: var(--muted, var(--fg-dim)); }
   input[type="text"], input[type="password"] {
-    width: 100%; border: 1px solid var(--border); background: var(--input);
-    color: var(--text); border-radius: 8px; padding: 8px 10px; font: inherit;
+    width: 100%; border: 1px solid var(--border); background: var(--input-bg, var(--btn-bg));
+    color: var(--fg, var(--text)); border-radius: var(--radius-sm, 8px); padding: 8px 10px; font: inherit;
   }
-  .check { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 13px; }
+  .check { display: flex; align-items: center; gap: 8px; color: var(--fg, var(--text)); font-size: 13px; }
   .check input { width: auto; }
   .detail-title { margin: 0 0 4px; font-size: 20px; font-weight: 500; }
   @media (max-width: 640px) {
@@ -295,6 +296,22 @@
   }
   function prefSet(id, value) {
     return call("prefs.set", { id: id, value: value });
+  }
+
+  function applyAppearance(vars) {
+    if (!vars || typeof vars !== "object") return;
+    var root = document.documentElement;
+    Object.keys(vars).forEach(function (k) {
+      if (vars[k] == null || vars[k] === "") return;
+      root.style.setProperty("--" + k, String(vars[k]));
+    });
+  }
+  function pullTheme() {
+    return call("theme.get")
+      .then(function (res) {
+        if (res && res.vars) applyAppearance(res.vars);
+      })
+      .catch(function () {});
   }
 
   var editingId = null;
@@ -501,8 +518,14 @@
   call("plugin.subscribe", { types: ["discord_changed"] }).catch(function () {});
   window.addEventListener("message", function (ev) {
     var d = ev.data;
-    if (d && d.channel === CHANNEL && d.event && d.event.type === "discord_changed") refresh();
+    if (!d || d.channel !== CHANNEL || !d.event) return;
+    if (d.event.type === "appearance_theme" && d.event.vars) {
+      applyAppearance(d.event.vars);
+      return;
+    }
+    if (d.event.type === "discord_changed") refresh();
   });
+  pullTheme();
   refresh();
 })();
 </script>
