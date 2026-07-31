@@ -88,9 +88,14 @@
   function call(method, params) {
     var id = crypto.randomUUID();
     return new Promise(function (resolve, reject) {
+      var timer = window.setTimeout(function () {
+        window.removeEventListener("message", onMsg);
+        reject(new Error("Timed out talking to Discord plugin — restart UEFN-Ducky and try again"));
+      }, 15000);
       function onMsg(ev) {
         var d = ev.data;
         if (!d || d.channel !== CHANNEL || d.id !== id) return;
+        window.clearTimeout(timer);
         window.removeEventListener("message", onMsg);
         if (d.ok) resolve(d.result);
         else reject(new Error(d.error || "bridge error"));
