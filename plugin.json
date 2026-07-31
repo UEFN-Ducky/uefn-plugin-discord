@@ -1,7 +1,7 @@
 {
   "id": "discord",
   "kind": "plugin",
-  "version": "1.1.3",
+  "version": "1.1.4",
   "label": "Discord",
   "description": "Discord bot chat, !ducky commands, and agent server-admin tools in UEFN Ducky",
   "min_app_version": "1.0.0",
@@ -65,38 +65,6 @@
         }
       ]
     },
-    "settings.sections": [
-      {
-        "tab": "Discord",
-        "id": "placement",
-        "title": "Placement",
-        "description": "Choose where Discord Ducky appears. The header button always opens or focuses the Discord tab, even when the dock panel is hidden.",
-        "order": 10,
-        "properties": [
-          {
-            "id": "showInHeader",
-            "type": "boolean",
-            "default": false,
-            "label": "Show in header",
-            "description": "Button to the right of the right-sidebar toggle opens Discord Ducky as a tab."
-          },
-          {
-            "id": "showInLeftSidebar",
-            "type": "boolean",
-            "default": false,
-            "label": "Show in left sidebar",
-            "description": "Show the Discord Ducky dock panel when it is docked on the left."
-          },
-          {
-            "id": "showInRightSidebar",
-            "type": "boolean",
-            "default": false,
-            "label": "Show in right sidebar",
-            "description": "Show the Discord Ducky dock panel when it is docked on the right."
-          }
-        ]
-      }
-    ],
     "dock.panels": [
       {
         "id": "groupchat",
