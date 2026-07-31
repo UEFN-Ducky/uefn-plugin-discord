@@ -150,8 +150,17 @@ def _run(st: _BotPoller) -> None:
                 if emit:
                     from . import commands
 
+                    # Only the elected process runs !commands (many UEFN-Ducky.exe
+                    # instances each used to reply once → 4–7 roster spam).
+                    lead = False
+                    try:
+                        lead = commands.is_command_leader()
+                    except Exception:
+                        lead = True
                     for m in new:
                         _push(m, channel, bid)
+                        if not lead:
+                            continue
                         try:
                             commands.maybe_handle(m, channel, bot_id=bid)
                         except Exception:
@@ -176,6 +185,13 @@ def debug_state(bot_id: str | None = None) -> dict[str, Any]:
         for other in list(bucket):
             if other.bot_id == bid and other is not st and not other.stop_flag:
                 orphans += 1
+    leader = False
+    try:
+        from . import commands
+
+        leader = commands.is_command_leader()
+    except Exception:
+        leader = False
     return {
         "bot_id": bid,
         "watching_channel_id": watching or "",
@@ -183,6 +199,8 @@ def debug_state(bot_id: str | None = None) -> dict[str, Any]:
         "poller_generation": st.generation,
         "global_generation": _generation(),
         "orphan_pollers": orphans,
+        "command_leader": leader,
+        "pid": __import__("os").getpid(),
         "last_poll_age_s": round(time.time() - last_poll_ts, 1) if last_poll_ts else None,
         "last_seen": last_seen,
     }

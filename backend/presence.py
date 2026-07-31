@@ -482,6 +482,8 @@ def _handle_dm_create(bot_id: str, data: Any) -> None:
         try:
             from . import client, commands
 
+            if not commands.is_command_leader():
+                return
             try:
                 msg = client.get_message(cid, mid, bot_id=bot_id)
             except client.DiscordError:

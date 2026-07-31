@@ -15,8 +15,11 @@ posts the reply as that bot. Bot-authored messages are ignored — no reply loop
 
 from __future__ import annotations
 
+import os
 import sys
 import threading
+import time
+from pathlib import Path
 from typing import Any
 
 from backend.agent.a2a_format import wrap_untrusted
@@ -27,6 +30,7 @@ DEFAULT_PREFIX = bots.DEFAULT_PREFIX
 _MAX_DISCORD = 1900  # Discord cap is 2000; leave room for the name prefix.
 _TIMEOUT_S = 300.0
 _SEEN_CAP = 512
+_CLAIM_TTL_S = 3600.0
 # Survives module reload so orphan poller threads + new code share one dedupe set.
 _SEEN_ATTR = "_uefn_discord_cmd_seen"
 
@@ -48,6 +52,57 @@ def is_authorized(author_id: str, allowed: set[str]) -> bool:
     return "*" in allowed or (bool(author_id) and author_id in allowed)
 
 
+def _claims_dir() -> Path:
+    base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA") or str(Path.home())
+    d = Path(base) / "UEFN-Ducky" / "discord_cmd_claims"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+def is_command_leader() -> bool:
+    """Only one UEFN-Ducky process should run !commands (many EXEs can be open)."""
+    path = _claims_dir().parent / "discord_commander.lock"
+    my_pid = os.getpid()
+    now = time.time()
+    try:
+        if path.is_file():
+            raw = path.read_text(encoding="utf-8").strip().split()
+            other = int(raw[0]) if raw else 0
+            ts = float(raw[1]) if len(raw) > 1 else 0.0
+            if other != my_pid and _pid_alive(other) and (now - ts) < 45.0:
+                return False
+        path.write_text(f"{my_pid} {now:.3f}", encoding="utf-8")
+        return True
+    except Exception:
+        # If lock I/O fails, still allow — per-message file claim is the hard gate.
+        return True
+
+
+def _prune_claims(folder: Path) -> None:
+    cutoff = time.time() - _CLAIM_TTL_S
+    try:
+        for p in folder.iterdir():
+            if not p.is_file():
+                continue
+            try:
+                if p.stat().st_mtime < cutoff:
+                    p.unlink(missing_ok=True)
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
 def _seen_store() -> dict[str, Any]:
     store = getattr(sys, _SEEN_ATTR, None)
     if not isinstance(store, dict) or "lock" not in store:
@@ -57,37 +112,57 @@ def _seen_store() -> dict[str, Any]:
 
 
 def _claim_message(message_id: str, *, channel_id: str = "", content: str = "") -> bool:
-    """True once per Discord message. Ids are global snowflakes — ignore bot_id.
+    """True once per Discord message across threads AND processes.
 
-    Empty id falls back to a short-lived content fingerprint so concurrent
-    orphan pollers still cannot multi-reply the same ``!bob``.
+    In-process set on ``sys`` plus atomic claim files under AppData so a second
+    UEFN-Ducky.exe cannot also reply to the same ``!bob``.
     """
     mid = (message_id or "").strip()
     if mid:
-        key = f"id:{mid}"
+        mem_key = f"id:{mid}"
+        file_key = mid
     else:
-        # Best-effort: same channel + body within the seen window.
         body = (content or "").strip().lower()
         if not body:
             return True
-        key = f"fp:{(channel_id or '').strip()}\0{body}"
+        mem_key = f"fp:{(channel_id or '').strip()}\0{body}"
+        # Keep filename safe / short.
+        file_key = f"fp_{abs(hash(mem_key)) & 0xFFFFFFFF:08x}"
     store = _seen_store()
     with store["lock"]:
         seen: set[str] = store["set"]
         order: list[str] = store["order"]
-        if key in seen:
+        if mem_key in seen:
             return False
-        seen.add(key)
-        order.append(key)
+        seen.add(mem_key)
+        order.append(mem_key)
         while len(order) > _SEEN_CAP:
             old = order.pop(0)
             seen.discard(old)
+    # Cross-process gate (survives multiple UEFN-Ducky.exe).
+    folder = _claims_dir()
+    _prune_claims(folder)
+    claim = folder / f"{file_key}.claimed"
+    try:
+        fd = os.open(str(claim), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        try:
+            os.write(fd, f"{os.getpid()} {time.time():.3f}".encode("utf-8"))
+        finally:
+            os.close(fd)
+        return True
+    except FileExistsError:
+        return False
+    except OSError:
+        # Disk weirdness — keep in-process claim only.
         return True
 
 
 def maybe_handle(message: dict[str, Any], channel_id: str, *, bot_id: str | None = None) -> bool:
     """True when the message is this bot's command (handled on a background thread)."""
     if message.get("bot"):
+        return False
+    # Another live UEFN-Ducky process already owns !commands — stay silent.
+    if not is_command_leader():
         return False
     bid = (bot_id or bots.DEFAULT_BOT_ID).strip() or bots.DEFAULT_BOT_ID
     prefix = bots.get_prefix(bid)
@@ -97,7 +172,7 @@ def maybe_handle(message: dict[str, Any], channel_id: str, *, bot_id: str | None
     # Exact prefix or prefix + space — "!ducky" / "!ducky x" yes; "!duckyx" no.
     if not (text_l == prefix_l or text_l.startswith(prefix_l + " ")):
         return False
-    # Claim before any side effect so orphan pollers / double-emits cannot multi-reply.
+    # Claim before any side effect so orphan pollers / other EXEs cannot multi-reply.
     if not _claim_message(
         str(message.get("id") or ""),
         channel_id=channel_id,
