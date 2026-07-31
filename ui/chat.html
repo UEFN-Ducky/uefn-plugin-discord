@@ -4,14 +4,53 @@
 <meta charset="utf-8" />
 <title>Discord Ducky</title>
 <style>
-  /* Colors come from host Appearance (theme.get / appearance_theme). No hardcoded theme. */
+  /*
+   * Appearance defaults (host critical.css). Live theme overrides via
+   * theme.get / appearance_theme setProperty on :root. Never leave vars unset —
+   * opaque iframes cannot inherit host :root (white flash / unstyled UI).
+   */
+  :root {
+    color-scheme: dark;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --font-ui: "Inter", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", Consolas, monospace;
+    --font-ui-size: 12px;
+    --font-mono-size: 13px;
+    --bg: #0a0a0a;
+    --sidebar: #0f0f0f;
+    --card: #181818;
+    --card-hover: #2c2c2c;
+    --input-bg: rgba(24, 24, 24, 0.6);
+    --btn-bg: #373737;
+    --btn-hover: #464646;
+    --fg: #ededed;
+    --fg-dim: #a0a0a0;
+    --fg-inverse: #ededed;
+    --muted: #7a7a7a;
+    --text: #ededed;
+    --border: #262626;
+    --border-light: #3a3a3a;
+    --accent: #2563eb;
+    --green: #3ddc84;
+    --red: #ff6058;
+    --danger: #ff6058;
+    --amber: #e8a317;
+    --warn: #e8a317;
+    --tab-hover: rgba(237, 237, 237, 0.04);
+    --groupchat-accent: #5865f2;
+    --groupchat-bg: #0a0a0a;
+    --groupchat-hover: rgba(237, 237, 237, 0.05);
+    --groupchat-time: #878787;
+    --groupchat-composer-bg: rgba(24, 24, 24, 0.72);
+  }
   * { box-sizing: border-box; }
   html, body {
     margin: 0; height: 100%;
-    background: var(--groupchat-bg, var(--bg));
-    color: var(--fg, var(--text));
-    font-family: var(--font-ui, "Segoe UI", system-ui, sans-serif);
-    font-size: var(--font-ui-size, 13px);
+    background: var(--groupchat-bg);
+    color: var(--fg);
+    font-family: var(--font-ui);
+    font-size: var(--font-ui-size);
     line-height: 1.4;
     overflow: hidden;
   }

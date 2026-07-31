@@ -4,10 +4,39 @@
 <meta charset="utf-8" />
 <title>Discord settings</title>
 <style>
-  /* Colors from host Appearance (theme.get / appearance_theme). No hardcoded theme. */
+  /*
+   * Appearance defaults (host critical.css). Live theme overrides via
+   * theme.get / appearance_theme. Opaque iframes cannot inherit host :root.
+   */
   :root {
+    color-scheme: dark;
     --pad-x: 30px;
     --pad-y: 30px;
+    --radius: 12px;
+    --radius-sm: 8px;
+    --font-ui: "Inter", "Segoe UI", system-ui, sans-serif;
+    --font-settings: "Inter", "Segoe UI", system-ui, sans-serif;
+    --font-ui-size: 12px;
+    --blur-md: blur(12px);
+    --bg: #0a0a0a;
+    --card: #181818;
+    --card-hover: #2c2c2c;
+    --input-bg: rgba(24, 24, 24, 0.6);
+    --btn-bg: #373737;
+    --btn-hover: #464646;
+    --fg: #ededed;
+    --fg-dim: #a0a0a0;
+    --fg-inverse: #ededed;
+    --muted: #7a7a7a;
+    --text: #ededed;
+    --border: #262626;
+    --border-light: #3a3a3a;
+    --accent: #2563eb;
+    --green: #3ddc84;
+    --red: #ff6058;
+    --danger: #ff6058;
+    --amber: #e8a317;
+    --warn: #e8a317;
   }
   @media (max-width: 720px) {
     :root { --pad-x: 16px; --pad-y: 20px; }
@@ -16,9 +45,9 @@
   html, body {
     margin: 0; height: 100%;
     background: var(--bg);
-    color: var(--fg, var(--text));
-    font-family: var(--font-settings, var(--font-ui, "Segoe UI", system-ui, sans-serif));
-    font-size: var(--font-ui-size, 13px);
+    color: var(--fg);
+    font-family: var(--font-settings);
+    font-size: var(--font-ui-size);
     line-height: 1.45;
     overflow: hidden;
   }
