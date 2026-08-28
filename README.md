@@ -26,3 +26,7 @@ Writes `deploy/discord-<version>.ducky-plugin.zip` (scripts/ and deploy/ are not
 ## Secrets
 
 Never commit tokens or keys. The app stores `discord`, `discord_guild`, `discord_name`, `discord_allowed_ids`, `discord_channel` (and per-bot `discord:<id>`) locally (DPAPI), not in this package.
+
+## License
+
+MIT. Copyright (c) 2026 Mindful Path Company, LLC. See [LICENSE](LICENSE).
