@@ -244,6 +244,36 @@
         </section>
 
         <section class="section">
+          <h2 class="section-title">Job notifications</h2>
+          <p class="section-desc">
+            When a ducky finishes a job in the Ducky app, POST to a Discord Incoming Webhook
+            (server channel → Integrations → Webhooks). This is not a bot token.
+          </p>
+          <div class="toggle-card">
+            <div class="toggle-row">
+              <div class="toggle-copy">
+                <div class="toggle-label">Notify when a ducky finishes</div>
+                <div class="toggle-desc">Sends one Discord message per finished app job (not on cancel).</div>
+              </div>
+              <label class="switch"><input type="checkbox" id="n-enabled" /><span></span></label>
+            </div>
+          </div>
+          <div class="form-grid" style="margin-top:4px">
+            <label class="full">Webhook URL
+              <input id="n-webhook" type="password" placeholder="https://discord.com/api/webhooks/… — leave blank to keep" autocomplete="off" />
+            </label>
+            <label class="full">Ping Discord user ID (optional)
+              <input id="n-mention" type="text" placeholder="your user id — uses &lt;@id&gt; in the message" />
+            </label>
+          </div>
+          <div class="header-actions" style="margin-top:4px">
+            <button type="button" class="primary" id="btn-notify-save">Save notifications</button>
+            <button type="button" id="btn-notify-test">Send test</button>
+          </div>
+          <div class="status" id="notify-status"></div>
+        </section>
+
+        <section class="section">
           <div class="header" style="align-items:center">
             <h2 class="section-title">Discord bots</h2>
             <div class="header-actions">
@@ -349,6 +379,21 @@
   var listEl = document.getElementById("list");
   var statusEl = document.getElementById("status");
   var detailStatus = document.getElementById("detail-status");
+  var notifyStatus = document.getElementById("notify-status");
+
+  function loadNotify() {
+    return rpc("get_notify", {})
+      .then(function (st) {
+        if (!st || st.ok === false) return;
+        document.getElementById("n-enabled").checked = !!st.enabled;
+        document.getElementById("n-mention").value = st.mention_id || "";
+        document.getElementById("n-webhook").value = "";
+        document.getElementById("n-webhook").placeholder = st.has_webhook
+          ? "Webhook saved — leave blank to keep"
+          : "https://discord.com/api/webhooks/…";
+      })
+      .catch(function () {});
+  }
 
   function escapeHtml(s) {
     return String(s || "").replace(/[&<>"']/g, function (c) {
@@ -481,6 +526,49 @@
     wirePref(id, PREF_DEFAULTS[id]);
   });
 
+  document.getElementById("n-enabled").onchange = function () {
+    rpc("save_notify", {
+      patch: {
+        enabled: !!document.getElementById("n-enabled").checked,
+        mention_id: document.getElementById("n-mention").value.trim(),
+      },
+    }).catch(function (e) {
+      setStatus(notifyStatus, String(e.message || e), "err");
+    });
+  };
+  document.getElementById("btn-notify-save").onclick = function () {
+    var patch = {
+      enabled: document.getElementById("n-enabled").checked,
+      mention_id: document.getElementById("n-mention").value.trim(),
+    };
+    var hook = document.getElementById("n-webhook").value.trim();
+    if (hook) patch.webhook_url = hook;
+    setStatus(notifyStatus, "Saving…");
+    rpc("save_notify", { patch: patch }).then(function (res) {
+      if (!res || res.ok === false) {
+        setStatus(notifyStatus, (res && res.error) || "Save failed", "err");
+        return;
+      }
+      setStatus(notifyStatus, "Saved", "ok");
+      document.getElementById("n-webhook").value = "";
+      return loadNotify();
+    }).catch(function (e) {
+      setStatus(notifyStatus, String(e.message || e), "err");
+    });
+  };
+  document.getElementById("btn-notify-test").onclick = function () {
+    setStatus(notifyStatus, "Sending…");
+    rpc("test_notify", {}).then(function (res) {
+      if (!res || res.ok === false) {
+        setStatus(notifyStatus, (res && res.error) || "Test failed", "err");
+        return;
+      }
+      setStatus(notifyStatus, "Test sent", "ok");
+    }).catch(function (e) {
+      setStatus(notifyStatus, String(e.message || e), "err");
+    });
+  };
+
   document.getElementById("btn-new").onclick = function () { openDetail(null); };
   document.getElementById("btn-refresh").onclick = refresh;
   document.getElementById("btn-back").onclick = closeDetail;
@@ -555,6 +643,7 @@
     if (d.event.type === "discord_changed") refresh();
   });
   pullTheme();
+  loadNotify();
   refresh();
 })();
 </script>

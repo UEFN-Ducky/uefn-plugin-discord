@@ -302,10 +302,62 @@ def list_members(bot_id: str = "") -> dict[str, Any]:
     }
 
 
+def get_notify(_unused: str = "") -> dict[str, Any]:
+    from . import notify
+
+    return notify.public_settings()
+
+
+def save_notify(patch: dict[str, Any] | None = None) -> dict[str, Any]:
+    from . import notify
+
+    p = patch if isinstance(patch, dict) else {}
+    try:
+        kwargs: dict[str, Any] = {}
+        if "enabled" in p:
+            kwargs["enabled"] = bool(p["enabled"])
+        if "mention_id" in p:
+            kwargs["mention_id"] = str(p.get("mention_id") or "")
+        if "webhook_url" in p:
+            kwargs["webhook_url"] = str(p.get("webhook_url") or "")
+        return {"ok": True, **notify.save_settings(**kwargs)}
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def test_notify(_unused: str = "") -> dict[str, Any]:
+    """POST a sample job-done payload to the saved webhook."""
+    from . import notify
+
+    st = notify.public_settings()
+    if not st.get("enabled"):
+        return {"ok": False, "error": "Enable job notifications first"}
+    url = notify.webhook_url()
+    if not url:
+        return {"ok": False, "error": "Paste a Discord webhook URL and save"}
+    mention = str(st.get("mention_id") or "").strip()
+    content = "🦆 **Ducky** finished its job. (test)"
+    if mention:
+        content = f"<@{mention}> {content}"
+    body: dict[str, Any] = {"content": content}
+    if mention:
+        body["allowed_mentions"] = {"users": [mention]}
+    try:
+        notify.post_webhook(url, body)
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 def register_panel_rpcs(api: Any) -> None:
     api.register_panel_rpc("list_bots", list_bots)
     api.register_panel_rpc("save_bot", save_bot)
     api.register_panel_rpc("delete_bot", delete_bot)
+    api.register_panel_rpc("get_notify", get_notify)
+    api.register_panel_rpc("save_notify", save_notify)
+    api.register_panel_rpc("test_notify", test_notify)
     api.register_panel_rpc("status", status)
     api.register_panel_rpc("list_channels", list_channels)
     api.register_panel_rpc("debug", debug)
