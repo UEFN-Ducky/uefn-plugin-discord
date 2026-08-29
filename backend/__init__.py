@@ -24,6 +24,12 @@ def register(api: Any) -> None:
 
         register_panel_rpcs(api)
         if api.is_enabled():
+            try:
+                from . import notify
+
+                notify.install_hook()
+            except Exception as exc:
+                api.log(f"Discord job-notify hook skipped: {exc}")
             # Never block Store enable/disable on Discord gateway connect.
             threading.Thread(
                 target=_start_runtime_safe,
@@ -74,8 +80,12 @@ def _start_runtime() -> None:
 
 def _stop_runtime() -> None:
     try:
-        from . import poller, presence
+        from . import notify, poller, presence
 
+        try:
+            notify.uninstall_hook()
+        except Exception:
+            pass
         presence.set_plugin_active(False)
         try:
             poller.stop_all(join_timeout_s=2.0)

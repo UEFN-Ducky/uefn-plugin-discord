@@ -11,6 +11,10 @@ Install or update from **Settings → Store** in the app — do not install from
 For a full member list and Online/Offline status, enable **Server Members Intent** and
 **Presence Intent** on the bot in the Discord Developer Portal (Bot → Privileged Gateway Intents).
 
+**Job webhook:** Settings → Discord → “Notify when a ducky finishes”. Paste a Discord
+Incoming Webhook URL (channel Integrations — not a bot token). When a chat in the
+Ducky app ends a job (`agent_stopped` done/error/timeout), the plugin POSTs to that URL.
+
 This plugin is a **real Discord bot** (Gateway `MESSAGE_CREATE`) — not a REST poller.
 **Show offline** disconnects the gateway (bot appears Offline; no `!commands` until Online again).
 Enable **Message Content Intent** in the Dev Portal if gateway content is empty (we also hydrate via REST).
