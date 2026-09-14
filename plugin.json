@@ -1,7 +1,7 @@
 {
   "id": "discord",
   "kind": "plugin",
-  "version": "1.1.16",
+  "version": "1.1.17",
   "label": "Discord",
   "description": "Discord bot chat, !ducky commands, and agent server-admin tools in UEFN Ducky",
   "min_app_version": "1.0.0",
@@ -46,14 +46,14 @@
         {
           "target": "settings.tab.discord",
           "title": "Discord settings",
-          "body": "Bot token, server ID, and where Discord Ducky appears are configured here. Press Discord to open the tab.",
+          "body": "Bot token and server ID are configured here. Dock panels live under Appearance → Sidebar. Press Discord to open the tab.",
           "advance": "require_click",
           "mode": "rect"
         },
         {
           "target": "settings.content",
           "title": "Connection",
-          "body": "Add a bot, paste your token and guild ID. Optional: Incoming Webhook URL to ping you when a Ducky app job finishes. Placement toggles control the header button and dock panels.",
+          "body": "Add a bot, paste your token and guild ID. Optional: Incoming Webhook URL to ping you when a Ducky app job finishes. The header toggle here and Appearance → Sidebar control where Discord Ducky appears.",
           "advance": "next",
           "mode": "rect"
         },

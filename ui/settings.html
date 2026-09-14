@@ -208,7 +208,7 @@
           <div>
             <h1>Discord</h1>
             <p class="section-desc" style="margin-top:6px">
-              Bot token, server ID, placement, and where Discord Ducky appears.
+              Bot token, server ID, and the header button. Dock panels are under Appearance → Sidebar.
             </p>
           </div>
         </div>
@@ -216,7 +216,8 @@
         <section class="section">
           <h2 class="section-title">Placement</h2>
           <p class="section-desc">
-            Choose where Discord Ducky appears. The header button always opens or focuses the Discord tab, even when the dock panel is hidden.
+            Choose where Discord Ducky appears. Dock panels are under Appearance → Sidebar.
+            The header button always opens or focuses the Discord tab, even when the dock panel is hidden.
           </p>
           <div class="toggle-card" id="placement">
             <div class="toggle-row">
@@ -225,20 +226,6 @@
                 <div class="toggle-desc">Button to the right of the right-sidebar toggle opens Discord Ducky as a tab.</div>
               </div>
               <label class="switch"><input type="checkbox" id="pref-showInHeader" /><span></span></label>
-            </div>
-            <div class="toggle-row">
-              <div class="toggle-copy">
-                <div class="toggle-label">Show in left sidebar</div>
-                <div class="toggle-desc">Show the Discord Ducky dock panel when it is docked on the left.</div>
-              </div>
-              <label class="switch"><input type="checkbox" id="pref-showInLeftSidebar" /><span></span></label>
-            </div>
-            <div class="toggle-row">
-              <div class="toggle-copy">
-                <div class="toggle-label">Show in right sidebar</div>
-                <div class="toggle-desc">Show the Discord Ducky dock panel when it is docked on the right.</div>
-              </div>
-              <label class="switch"><input type="checkbox" id="pref-showInRightSidebar" /><span></span></label>
             </div>
           </div>
         </section>
@@ -324,8 +311,6 @@
   var CHANNEL = "uefn-plugin-ui";
   var PREF_DEFAULTS = {
     showInHeader: false,
-    showInLeftSidebar: false,
-    showInRightSidebar: false,
   };
 
   function call(method, params) {
