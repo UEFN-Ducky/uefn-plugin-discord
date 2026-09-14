@@ -495,6 +495,12 @@ def _handle_message_create(bot_id: str, data: Any) -> None:
                     )
             except Exception:
                 pass
+            try:
+                from .automations import emit_message
+
+                emit_message(msg, cid, bot_id, data)
+            except Exception:
+                pass
             commands.maybe_handle(msg, cid, bot_id=bot_id)
         except Exception:
             pass

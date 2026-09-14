@@ -17,6 +17,9 @@ def register(api: Any) -> None:
     from .tools import register_tools
 
     register_tools(api)
+    from .automations import register_nodes
+
+    register_nodes(api)
 
     # EXE builds before panel-RPC host work lack api.register_panel_rpc — do not crash.
     if hasattr(api, "register_panel_rpc"):
@@ -48,6 +51,9 @@ def register(api: Any) -> None:
 
 def unload() -> None:
     """Called by the host before Store update/disable drops this module."""
+    from .automations import clear_api
+
+    clear_api()
     _stop_runtime()
 
 

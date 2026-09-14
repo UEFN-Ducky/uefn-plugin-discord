@@ -1,7 +1,7 @@
 {
   "id": "discord",
   "kind": "plugin",
-  "version": "1.1.14",
+  "version": "1.1.15",
   "label": "Discord",
   "description": "Discord bot chat, !ducky commands, and agent server-admin tools in UEFN Ducky",
   "min_app_version": "1.0.0",
@@ -100,6 +100,31 @@
         "discord_ban_member",
         "discord_delete_message",
         "discord_timeout_member"
+      ]
+    },
+    "automations": {
+      "triggers": [
+        {
+          "id": "discord.message",
+          "label": "Discord message",
+          "group": "Triggers",
+          "description": "Human message on the Gateway. Empty channel_id matches every channel.",
+          "config_fields": [
+            { "id": "channel_id", "label": "Channel id (optional)", "type": "string" }
+          ]
+        }
+      ],
+      "nodes": [
+        {
+          "id": "discord.send",
+          "label": "Send Discord message",
+          "group": "Discord",
+          "description": "Post as the bot. Empty fields use the trigger payload.",
+          "config_fields": [
+            { "id": "channel_id", "label": "Channel id", "type": "string" },
+            { "id": "text", "label": "Text", "type": "textarea" }
+          ]
+        }
       ]
     }
   },
