@@ -46,14 +46,14 @@
         {
           "target": "settings.tab.discord",
           "title": "Discord settings",
-          "body": "Bot token and server ID are configured here. Dock panels live under Appearance → Sidebar. Press Discord to open the tab.",
+          "body": "Bot token and server ID are configured here. Header buttons live under Appearance → Header. Dock panels live under Appearance → Sidebar. Press Discord to open the tab.",
           "advance": "require_click",
           "mode": "rect"
         },
         {
           "target": "settings.content",
           "title": "Connection",
-          "body": "Add a bot, paste your token and guild ID. Optional: Incoming Webhook URL to ping you when a Ducky app job finishes. The header toggle here and Appearance → Sidebar control where Discord Ducky appears.",
+          "body": "Add a bot, paste your token and guild ID. Optional: Incoming Webhook URL to ping you when a Ducky app job finishes. Appearance → Header and Appearance → Sidebar control where Discord Ducky appears.",
           "advance": "next",
           "mode": "rect"
         },

@@ -208,27 +208,10 @@
           <div>
             <h1>Discord</h1>
             <p class="section-desc" style="margin-top:6px">
-              Bot token, server ID, and the header button. Dock panels are under Appearance → Sidebar.
+              Bot token and server ID. Header buttons and dock panels are under Appearance → Header and Appearance → Sidebar.
             </p>
           </div>
         </div>
-
-        <section class="section">
-          <h2 class="section-title">Placement</h2>
-          <p class="section-desc">
-            Choose where Discord Ducky appears. Dock panels are under Appearance → Sidebar.
-            The header button always opens or focuses the Discord tab, even when the dock panel is hidden.
-          </p>
-          <div class="toggle-card" id="placement">
-            <div class="toggle-row">
-              <div class="toggle-copy">
-                <div class="toggle-label">Show in header</div>
-                <div class="toggle-desc">Button to the right of the right-sidebar toggle opens Discord Ducky as a tab.</div>
-              </div>
-              <label class="switch"><input type="checkbox" id="pref-showInHeader" /><span></span></label>
-            </div>
-          </div>
-        </section>
 
         <section class="section">
           <h2 class="section-title">Job notifications</h2>
@@ -309,9 +292,6 @@
 <script>
 (function () {
   var CHANNEL = "uefn-plugin-ui";
-  var PREF_DEFAULTS = {
-    showInHeader: false,
-  };
 
   function call(method, params) {
     var id = crypto.randomUUID();
@@ -334,12 +314,6 @@
   }
   function rpc(method, params) {
     return call("plugin.call", { method: method, params: params || {} });
-  }
-  function prefGet(id) {
-    return call("prefs.get", { id: id });
-  }
-  function prefSet(id, value) {
-    return call("prefs.set", { id: id, value: value });
   }
 
   function applyAppearance(vars) {
@@ -488,28 +462,6 @@
         renderBots([]);
       });
   }
-
-  function wirePref(id, defaultOn) {
-    var el = document.getElementById("pref-" + id);
-    if (!el) return;
-    prefGet(id)
-      .then(function (res) {
-        var v = res && res.value;
-        el.checked = typeof v === "boolean" ? v : defaultOn;
-      })
-      .catch(function () {
-        el.checked = defaultOn;
-      });
-    el.onchange = function () {
-      prefSet(id, !!el.checked).catch(function (e) {
-        setStatus(statusEl, String(e.message || e), "err");
-      });
-    };
-  }
-
-  Object.keys(PREF_DEFAULTS).forEach(function (id) {
-    wirePref(id, PREF_DEFAULTS[id]);
-  });
 
   document.getElementById("n-enabled").onchange = function () {
     rpc("save_notify", {
