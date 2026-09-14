@@ -1,7 +1,7 @@
 {
   "id": "discord",
   "kind": "plugin",
-  "version": "1.1.15",
+  "version": "1.1.16",
   "label": "Discord",
   "description": "Discord bot chat, !ducky commands, and agent server-admin tools in UEFN Ducky",
   "min_app_version": "1.0.0",
@@ -125,7 +125,79 @@
             { "id": "text", "label": "Text", "type": "textarea" }
           ]
         }
-      ]
+      ],
+      "templates": [
+      {
+        "id": "discord-spawn-ducky",
+        "label": "Discord starts a ducky",
+        "icon": "💬",
+        "description": "A human Discord message spawns a ducky with that text. Ready as-is.",
+        "graph": {
+          "nodes": [
+            {
+              "id": "t",
+              "type": "discord.message",
+              "x": 40,
+              "y": 80,
+              "config": {},
+              "label": "Discord message",
+              "description": "Human message on the Gateway"
+            },
+            {
+              "id": "s",
+              "type": "ducky.spawn",
+              "x": 300,
+              "y": 80,
+              "config": { "title": "Discord", "prompt": "" },
+              "label": "Spawn ducky",
+              "description": "Uses the Discord message as the prompt"
+            }
+          ],
+          "edges": [{ "source": "t", "target": "s", "kind": "main" }]
+        }
+      },
+      {
+        "id": "discord-spawn-ack",
+        "label": "Discord ducky + On it",
+        "icon": "🤖",
+        "description": "Spawn a ducky from the message and reply On it. in Discord.",
+        "graph": {
+          "nodes": [
+            {
+              "id": "t",
+              "type": "discord.message",
+              "x": 40,
+              "y": 80,
+              "config": {},
+              "label": "Discord message",
+              "description": "Human message on the Gateway"
+            },
+            {
+              "id": "s",
+              "type": "ducky.spawn",
+              "x": 280,
+              "y": 80,
+              "config": { "title": "Discord", "prompt": "" },
+              "label": "Spawn ducky",
+              "description": "Uses the Discord message as the prompt"
+            },
+            {
+              "id": "r",
+              "type": "discord.send",
+              "x": 520,
+              "y": 80,
+              "config": { "channel_id": "", "text": "On it." },
+              "label": "Send Discord message",
+              "description": "Replies in the same channel"
+            }
+          ],
+          "edges": [
+            { "source": "t", "target": "s", "kind": "main" },
+            { "source": "s", "target": "r", "kind": "main" }
+          ]
+        }
+      }
+    ]
     }
   },
   "backend": {

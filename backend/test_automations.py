@@ -17,6 +17,12 @@ def test_plugin_json_declares_message_and_send() -> None:
     assert "discord.send" in nodes
     fields = {f["id"] for f in auto["nodes"][0]["config_fields"]}
     assert {"channel_id", "text"} <= fields
+    tmpls = auto["templates"]
+    ids = {row["id"] for row in tmpls}
+    assert {"discord-spawn-ducky", "discord-spawn-ack"} <= ids
+    spawn = next(row for row in tmpls if row["id"] == "discord-spawn-ducky")
+    types = {n["type"] for n in spawn["graph"]["nodes"]}
+    assert {"discord.message", "ducky.spawn"} <= types
 
 
 def test_message_payload_aliases_prompt() -> None:
