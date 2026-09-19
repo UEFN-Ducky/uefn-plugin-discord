@@ -228,7 +228,7 @@ def _members_intent_hint(err: str, intent_level: int) -> str:
         return (
             "Enable Server Members Intent (and Presence Intent for Online/Offline) "
             "in the Discord Developer Portal → Bot → Privileged Gateway Intents, "
-            "then restart UEFN-Ducky."
+            "then applies on next start."
         )
     if intent_level <= 0:
         return (
