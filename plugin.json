@@ -1,7 +1,7 @@
 {
   "id": "discord",
   "kind": "plugin",
-  "version": "1.1.17",
+  "version": "1.1.18",
   "label": "Discord",
   "description": "Discord bot chat, !ducky commands, and agent server-admin tools in UEFN Ducky",
   "min_app_version": "1.0.0",
@@ -46,14 +46,14 @@
         {
           "target": "settings.tab.discord",
           "title": "Discord settings",
-          "body": "Bot token and server ID are configured here. Header buttons live under Appearance → Header. Dock panels live under Appearance → Sidebar. Press Discord to open the tab.",
+          "body": "Bot token and server ID are configured here. Header buttons live under Appearance \u2192 Header. Dock panels live under Appearance \u2192 Sidebar. Press Discord to open the tab.",
           "advance": "require_click",
           "mode": "rect"
         },
         {
           "target": "settings.content",
           "title": "Connection",
-          "body": "Add a bot, paste your token and guild ID. Optional: Incoming Webhook URL to ping you when a Ducky app job finishes. Appearance → Header and Appearance → Sidebar control where Discord Ducky appears.",
+          "body": "Add a bot, paste your token and guild ID. Optional: Incoming Webhook URL to ping you when a Ducky app job finishes. Appearance \u2192 Header and Appearance \u2192 Sidebar control where Discord Ducky appears.",
           "advance": "next",
           "mode": "rect"
         },
@@ -110,7 +110,11 @@
           "group": "Triggers",
           "description": "Human message on the Gateway. Empty channel_id matches every channel.",
           "config_fields": [
-            { "id": "channel_id", "label": "Channel id (optional)", "type": "string" }
+            {
+              "id": "channel_id",
+              "label": "Channel id (optional)",
+              "type": "string"
+            }
           ]
         }
       ],
@@ -121,83 +125,114 @@
           "group": "Discord",
           "description": "Post as the bot. Empty fields use the trigger payload.",
           "config_fields": [
-            { "id": "channel_id", "label": "Channel id", "type": "string" },
-            { "id": "text", "label": "Text", "type": "textarea" }
+            {
+              "id": "channel_id",
+              "label": "Channel id",
+              "type": "string"
+            },
+            {
+              "id": "text",
+              "label": "Text",
+              "type": "textarea"
+            }
           ]
         }
       ],
       "templates": [
-      {
-        "id": "discord-spawn-ducky",
-        "label": "Discord starts a ducky",
-        "icon": "💬",
-        "description": "A human Discord message spawns a ducky with that text. Ready as-is.",
-        "graph": {
-          "nodes": [
-            {
-              "id": "t",
-              "type": "discord.message",
-              "x": 40,
-              "y": 80,
-              "config": {},
-              "label": "Discord message",
-              "description": "Human message on the Gateway"
-            },
-            {
-              "id": "s",
-              "type": "ducky.spawn",
-              "x": 300,
-              "y": 80,
-              "config": { "title": "Discord", "prompt": "" },
-              "label": "Spawn ducky",
-              "description": "Uses the Discord message as the prompt"
-            }
-          ],
-          "edges": [{ "source": "t", "target": "s", "kind": "main" }]
+        {
+          "id": "discord-spawn-ducky",
+          "label": "Discord starts a ducky",
+          "icon": "\ud83d\udcac",
+          "description": "A human Discord message spawns a ducky with that text. Ready as-is.",
+          "graph": {
+            "nodes": [
+              {
+                "id": "t",
+                "type": "discord.message",
+                "x": 40,
+                "y": 80,
+                "config": {},
+                "label": "Discord message",
+                "description": "Human message on the Gateway"
+              },
+              {
+                "id": "s",
+                "type": "ducky.spawn",
+                "x": 300,
+                "y": 80,
+                "config": {
+                  "title": "Discord",
+                  "prompt": ""
+                },
+                "label": "Spawn ducky",
+                "description": "Uses the Discord message as the prompt"
+              }
+            ],
+            "edges": [
+              {
+                "source": "t",
+                "target": "s",
+                "kind": "main"
+              }
+            ]
+          }
+        },
+        {
+          "id": "discord-spawn-ack",
+          "label": "Discord ducky + On it",
+          "icon": "\ud83e\udd16",
+          "description": "Spawn a ducky from the message and reply On it. in Discord.",
+          "graph": {
+            "nodes": [
+              {
+                "id": "t",
+                "type": "discord.message",
+                "x": 40,
+                "y": 80,
+                "config": {},
+                "label": "Discord message",
+                "description": "Human message on the Gateway"
+              },
+              {
+                "id": "s",
+                "type": "ducky.spawn",
+                "x": 280,
+                "y": 80,
+                "config": {
+                  "title": "Discord",
+                  "prompt": ""
+                },
+                "label": "Spawn ducky",
+                "description": "Uses the Discord message as the prompt"
+              },
+              {
+                "id": "r",
+                "type": "discord.send",
+                "x": 520,
+                "y": 80,
+                "config": {
+                  "channel_id": "",
+                  "text": "On it."
+                },
+                "label": "Send Discord message",
+                "description": "Replies in the same channel"
+              }
+            ],
+            "edges": [
+              {
+                "source": "t",
+                "target": "s",
+                "kind": "main"
+              },
+              {
+                "source": "s",
+                "target": "r",
+                "kind": "main"
+              }
+            ]
+          }
         }
-      },
-      {
-        "id": "discord-spawn-ack",
-        "label": "Discord ducky + On it",
-        "icon": "🤖",
-        "description": "Spawn a ducky from the message and reply On it. in Discord.",
-        "graph": {
-          "nodes": [
-            {
-              "id": "t",
-              "type": "discord.message",
-              "x": 40,
-              "y": 80,
-              "config": {},
-              "label": "Discord message",
-              "description": "Human message on the Gateway"
-            },
-            {
-              "id": "s",
-              "type": "ducky.spawn",
-              "x": 280,
-              "y": 80,
-              "config": { "title": "Discord", "prompt": "" },
-              "label": "Spawn ducky",
-              "description": "Uses the Discord message as the prompt"
-            },
-            {
-              "id": "r",
-              "type": "discord.send",
-              "x": 520,
-              "y": 80,
-              "config": { "channel_id": "", "text": "On it." },
-              "label": "Send Discord message",
-              "description": "Replies in the same channel"
-            }
-          ],
-          "edges": [
-            { "source": "t", "target": "s", "kind": "main" },
-            { "source": "s", "target": "r", "kind": "main" }
-          ]
-        }
-      }
-    ]
+      ]
     }
   },
   "backend": {
