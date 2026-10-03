@@ -7,3 +7,6 @@ __pycache__/
 
 # Agent / local scratch dirs (never commit)
 .tmp-*
+
+# Build output — never commit
+*.pyc
