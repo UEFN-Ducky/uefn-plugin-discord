@@ -99,10 +99,14 @@ def _running_duckies() -> int:
 
 
 def _uefn_open() -> bool:
+    # The UEFN listener's health answer: one loopback GET per tick, where a process list
+    # would start tasklist twice every 15 s for as long as Discord is open.
     try:
-        from frontend.window_view import _uefn_running
+        from backend.bridge import listener_get_health
+        from frontend.settings import PANEL_LISTENER_PORT
 
-        return _uefn_running()
+        health = listener_get_health(PANEL_LISTENER_PORT, timeout=0.5)
+        return bool(health is not None and health.get("status") == "ok")
     except Exception:
         return False
 
