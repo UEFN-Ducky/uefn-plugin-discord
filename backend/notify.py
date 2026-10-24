@@ -165,10 +165,9 @@ def payload_for_event(
 
 def _label_for(conv_id: str) -> str:
     try:
-        from frontend.ui_web.project_chats import load_conversation
+        from frontend.ui_web.project_chats import conversation_title
 
-        conv = load_conversation(conv_id)
-        return str(getattr(conv, "title", "") or "").strip() or "Ducky"
+        return conversation_title(conv_id) or "Ducky"
     except Exception:
         return "Ducky"
 
@@ -203,7 +202,10 @@ def post_webhook(url: str, body: dict[str, Any]) -> None:
 
 
 def on_panel_event(event: dict[str, Any]) -> None:
-    if not isinstance(event, dict):
+    # Only a finished turn can post. Every streamed event (tool, text, plan) passes here,
+    # and reading the settings, the webhook secret and the chat for each held about a core
+    # while agents ran (Oct 24 2026).
+    if not isinstance(event, dict) or event.get("type") != "agent_stopped":
         return
     conv_id = str(event.get("conv_id") or "").strip()
     body = payload_for_event(

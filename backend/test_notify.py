@@ -35,6 +35,17 @@ def isolated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     yield tmp_path, store
 
 
+def test_streamed_events_read_nothing(isolated, monkeypatch):
+    # Every tool and text event passes the tap; only a finished turn may read anything.
+    touched: list[str] = []
+    monkeypatch.setattr(notify, "_read_cfg", lambda: touched.append("cfg") or {})
+    monkeypatch.setattr(notify, "_label_for", lambda cid: touched.append("chat") or "x")
+    for kind in ("agent_tool", "assistant_delta", "plan_updated", "agent_started"):
+        for _ in range(25):
+            notify.on_panel_event({"type": kind, "conv_id": "c1", "run_id": "r1"})
+    assert touched == []
+
+
 def test_skips_when_disabled_or_no_webhook(isolated):
     _tmp, store = isolated
     notify.save_settings(enabled=False, mention_id="", webhook_url="")
