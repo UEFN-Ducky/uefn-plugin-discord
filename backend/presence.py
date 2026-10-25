@@ -95,6 +95,12 @@ def _send_presence_update(sock: ssl.SSLSocket, bot_id: str) -> None:
     _mark_self_status(bot_id, str(payload.get("status") or "online"))
 
 
+def bot_user_id(bot_id: str) -> str:
+    """This bot's own Discord user id (from Gateway READY), or '' before it connects."""
+    with _lock:
+        return _bot_user_ids.get(bot_id) or ""
+
+
 def _mark_self_status(bot_id: str, status: str) -> None:
     """Keep our own sidebar row in sync with the presence we advertise."""
     st = status if status in _ONLINE_STATUSES else "offline"

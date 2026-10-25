@@ -553,17 +553,29 @@ def get_message(
     return _normalize_message(raw or {})
 
 
-def send_message(channel_id: str, text: str, *, bot_id: str | None = None) -> dict[str, Any]:
-    """Post a message to a channel as the bot. Returns the created message (normalized)."""
+def send_message(
+    channel_id: str,
+    text: str,
+    *,
+    bot_id: str | None = None,
+    reply_to: str | None = None,
+    safe_mentions: bool = False,
+) -> dict[str, Any]:
+    """Post a message to a channel as the bot. Returns the created message (normalized).
+
+    safe_mentions: text an AI wrote can't ping @everyone, @here or roles (users only)."""
     cid = (channel_id or "").strip()
     body = (text or "").strip()
     if not cid:
         raise DiscordError("No channel id")
     if not body:
         raise DiscordError("Message is empty")
-    created = _request(
-        "POST", f"/channels/{cid}/messages", {"content": body[:2000]}, bot_id=bot_id or DEFAULT_BOT_ID
-    )
+    payload: dict[str, Any] = {"content": body[:2000]}
+    if reply_to:
+        payload["message_reference"] = {"message_id": str(reply_to), "fail_if_not_exists": False}
+    if safe_mentions:
+        payload["allowed_mentions"] = {"parse": ["users"], "replied_user": True}
+    created = _request("POST", f"/channels/{cid}/messages", payload, bot_id=bot_id or DEFAULT_BOT_ID)
     return _normalize_message(created or {})
 
 

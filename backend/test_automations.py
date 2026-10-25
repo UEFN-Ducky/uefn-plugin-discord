@@ -42,7 +42,7 @@ def test_message_payload_aliases_prompt() -> None:
 def test_send_falls_back_to_payload(monkeypatch) -> None:
     sent: list[tuple] = []
 
-    def fake_send(channel_id: str, text: str, *, bot_id: str | None = None):
+    def fake_send(channel_id: str, text: str, *, bot_id: str | None = None, **_kw):
         sent.append((channel_id, text, bot_id))
         return {"id": "out"}
 
@@ -59,7 +59,7 @@ def test_send_falls_back_to_payload(monkeypatch) -> None:
 def test_send_prefers_config_over_payload(monkeypatch) -> None:
     sent: list[tuple] = []
 
-    def fake_send(channel_id: str, text: str, *, bot_id: str | None = None):
+    def fake_send(channel_id: str, text: str, *, bot_id: str | None = None, **_kw):
         sent.append((channel_id, text, bot_id))
         return {"id": "out"}
 
@@ -74,6 +74,60 @@ def test_send_prefers_config_over_payload(monkeypatch) -> None:
     )
     assert out["ok"] is True
     assert sent == [("cfg", "from-config", None)]
+
+
+def test_payload_mention_allowed_and_pr_link(monkeypatch) -> None:
+    monkeypatch.setattr(automations, "_bot_user_id", lambda _bid: "42")
+    monkeypatch.setattr(automations, "_is_allowed", lambda aid, _bid: aid == "9")
+    out = automations.message_payload(
+        {"id": "m1", "author": "Lezzy", "author_id": "9",
+         "content": "<@42> https://github.com/UEFN-Ducky/UEFN-Ducky/pull/7"},
+        "c1", "bob", {"mentions": [{"id": "42"}]},
+    )
+    assert out["mentioned"] == "yes" and out["allowed"] == "yes"
+    assert out["prompt"] == "https://github.com/UEFN-Ducky/UEFN-Ducky/pull/7"
+    assert (out["pr_owner"], out["pr_repo"], out["pr_number"]) == ("UEFN-Ducky", "UEFN-Ducky/UEFN-Ducky", "7")
+    other = automations.message_payload(
+        {"id": "m2", "author_id": "8", "content": "see http://github.com/x/y/pull/1 or github.com.evil.io/a/b/pull/2"},
+        "c1", "bob", {},
+    )
+    assert other["mentioned"] == "no" and other["allowed"] == "no"
+    assert other["pr_url"] == "" and other["pr_owner"] == ""
+
+
+def test_send_wired_text_replies_split_and_safe(monkeypatch) -> None:
+    calls: list[dict] = []
+
+    def fake_send(channel_id: str, text: str, **kw):
+        calls.append({"channel_id": channel_id, "text": text, **kw})
+        return {"id": "out"}
+
+    from . import client as real_client
+
+    monkeypatch.setattr(real_client, "send_message", fake_send)
+    long_text = ("line\n" * 600).strip()
+    out = automations.handle_send({
+        "config": {"text": "ignored"},
+        "inputs": {"text": long_text},
+        "payload": {"channel_id": "c1", "message_id": "m1", "content": "@bob review"},
+    })
+    assert out["ok"] is True and out["parts"] == len(calls) > 1
+    assert all(len(c["text"]) <= 2000 and c["safe_mentions"] for c in calls)
+    assert calls[0]["reply_to"] == "m1" and calls[1]["reply_to"] is None
+    assert "".join(c["text"] for c in calls).count("line") == 600
+
+
+def test_pr_review_template_gates_and_wires() -> None:
+    root = Path(__file__).resolve().parents[1]
+    auto = json.loads((root / "plugin.json").read_text(encoding="utf-8"))["contributes"]["automations"]
+    tmpl = next(row for row in auto["templates"] if row["id"] == "discord-pr-review")
+    nodes = {n["id"]: n for n in tmpl["graph"]["nodes"]}
+    assert nodes["t"]["config"] == {"mentioned": "yes", "allowed": "yes"}
+    assert nodes["b"]["config"] == {"field": "pr_owner", "equals": "UEFN-Ducky"}
+    assert "--match-head-commit" in nodes["a"]["config"]["prompt"]
+    assert {"source": "a", "target": "r", "kind": "data", "source_pin": "text", "target_pin": "text"} in tmpl["graph"]["edges"]
+    send = next(row for row in auto["nodes"] if row["id"] == "discord.send")
+    assert [p["id"] for p in send["inputs"]] == ["text"]
 
 
 def test_send_requires_channel_and_text() -> None:
