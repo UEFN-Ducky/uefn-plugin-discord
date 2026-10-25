@@ -22,6 +22,14 @@ image (Art Asset `ducky_1024`) and button are fixed in `backend/rich_presence.py
 it on and pick what shows: whether UEFN is open and how many duckies are working. It never shows
 project names or chat titles. On by default.
 
+**Workflows:** the bot's jobs are workflows (Workflows tab). The **Discord message** trigger picks
+the bot, the channel, @mentions only, and **Only these roles** — a role list for that one workflow,
+separate from the agent allow list, so a role can start it without being able to talk to your agents.
+**React to message** adds or swaps the bot's emoji (👀 while working, ✅ when done) and
+**Send Discord message** replies with an Agent's text (split for Discord, never pings @everyone).
+The **Discord PR review** template reviews a `github.com/UEFN-Ducky` pull request link in a sandbox
+and merges only after the owner presses Allow (`gh pr merge --match-head-commit`).
+
 This plugin is a **real Discord bot** (Gateway `MESSAGE_CREATE`) — not a REST poller.
 **Show offline** disconnects the gateway (bot appears Offline; no `!commands` until Online again).
 Enable **Message Content Intent** in the Dev Portal if gateway content is empty (we also hydrate via REST).
