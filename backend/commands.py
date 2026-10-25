@@ -23,8 +23,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-from backend.agent.a2a_format import wrap_untrusted
-
 from . import bots, client
 
 DEFAULT_PREFIX = bots.DEFAULT_PREFIX
@@ -341,6 +339,8 @@ def _run_command(text: str, channel_id: str, author: str, bot_id: str, prefix: s
                 conv_id = _spawn_conv(profile)
                 _convs[key] = conv_id
             _send(channel_id, f"🦆 **{name}** is on it…", bot_id)
+            from backend.agent.a2a_format import wrap_untrusted  # the app's; imported where used
+
             outcome = run_message_and_wait(
                 conv_id,
                 f"(via Discord, from {author}) {wrap_untrusted(message, 'discord')}",

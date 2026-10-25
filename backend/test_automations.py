@@ -152,6 +152,27 @@ def test_react_swaps_eyes_for_check(monkeypatch) -> None:
     assert automations.handle_react({"config": {"emoji": "x"}, "payload": {}})["ok"] is False
 
 
+def test_emit_runs_workflows_once_per_message(monkeypatch, tmp_path) -> None:
+    from . import commands
+
+    monkeypatch.setattr(commands, "_claims_dir", lambda: tmp_path)
+    monkeypatch.setattr(automations, "_bot_user_id", lambda _bid: "")
+    monkeypatch.setattr(automations, "_is_allowed", lambda *_a: False)
+    emitted: list[str] = []
+
+    class Api:
+        def emit_automation(self, trigger, payload):
+            emitted.append(payload["message_id"])
+
+    monkeypatch.setattr(automations, "_api", Api())
+    msg = {"id": "dup-1", "author_id": "1", "content": "https://github.com/UEFN-Ducky/x/pull/1"}
+    for _ in range(5):  # five processes / gateway copies hear the same message
+        automations.emit_message(msg, "c1", "bob", {})
+    automations.emit_message(msg, "c1", "other-bot", {})  # another bot runs its own workflows
+    assert emitted == ["dup-1", "dup-1"]
+    assert commands._claim_message("dup-1")  # the same message can still be a !command
+
+
 def test_send_requires_channel_and_text() -> None:
     assert automations.handle_send({"config": {}, "payload": {}})["ok"] is False
     assert automations.handle_send({"config": {"channel_id": "c"}, "payload": {}})["ok"] is False

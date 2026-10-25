@@ -122,6 +122,14 @@ def emit_message(msg: dict[str, Any], channel_id: str, bot_id: str, raw: dict[st
     api = _api
     if api is None or not hasattr(api, "emit_automation"):
         return
+    # Every Ducky process with this plugin hears the Gateway: one message started a PR
+    # review five times. Claim it once per bot across threads and processes (own key, so
+    # the same message can still be a !command).
+    from .commands import _claim_message
+
+    mid = str(msg.get("id") or (raw or {}).get("id") or "")
+    if not _claim_message(f"wf-{bot_id}-{mid}" if mid else "", channel_id=channel_id, content=f"wf {msg.get('content') or ''}"):
+        return
     api.emit_automation("discord.message", message_payload(msg, channel_id, bot_id, raw))
 
 
