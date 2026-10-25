@@ -6,10 +6,21 @@ never ship them in this package.
 
 from __future__ import annotations
 
+import os
 import threading
 from typing import Any
 
 PLUGIN_ID = "discord"
+
+
+def _in_app() -> bool:
+    """The app window, not a tool server or an agent host: only it runs the bots' gateway,
+    the poller and Discord presence, so Discord sees one Ducky, not one per process."""
+    try:
+        from backend.process_role import role
+    except ImportError:  # a core without process roles
+        return os.environ.get("UEFN_DUCKY_MCP_BRIDGE") != "1"
+    return role() == "app"
 
 
 def register(api: Any) -> None:
@@ -26,7 +37,7 @@ def register(api: Any) -> None:
         from .panel_rpc import register_panel_rpcs
 
         register_panel_rpcs(api)
-        if api.is_enabled():
+        if api.is_enabled() and _in_app():
             try:
                 from . import notify
 
