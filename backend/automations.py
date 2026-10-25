@@ -22,6 +22,7 @@ def register_nodes(api: Any) -> None:
     if not hasattr(api, "register_automation_node"):
         return
     api.register_automation_node("discord.send", handle_send)
+    api.register_automation_node("discord.react", handle_react)
     # Not a step: fills the "Bot" dropdowns (options_from) with this PC's bots.
     api.register_automation_node("discord.bots", bot_options)
     api.register_automation_node("discord.roles", role_options)
@@ -136,6 +137,30 @@ def split_text(text: str, size: int = _CHUNK) -> list[str]:
     if rest:
         out.append(rest)
     return out
+
+
+def handle_react(ctx: dict[str, Any]) -> dict[str, Any]:
+    """React to the message that started the run: add Emoji, take Remove off (👀 → ✅)."""
+    cfg = ctx.get("config") if isinstance(ctx.get("config"), dict) else {}
+    payload = ctx.get("payload") if isinstance(ctx.get("payload"), dict) else {}
+    channel_id = str(cfg.get("channel_id") or payload.get("channel_id") or "").strip()
+    message_id = str(cfg.get("message_id") or payload.get("message_id") or "").strip()
+    add, drop = str(cfg.get("emoji") or "").strip(), str(cfg.get("remove") or "").strip()
+    bot_id = str(cfg.get("bot_id") or payload.get("bot_id") or "").strip() or None
+    if not channel_id or not message_id:
+        return {"ok": False, "error": "no message to react to (run it from a Discord message trigger)"}
+    if not add and not drop:
+        return {"ok": False, "error": "emoji required"}
+    from . import client
+
+    if drop:
+        try:
+            client.react(channel_id, message_id, drop, remove=True, bot_id=bot_id)
+        except client.DiscordError:
+            pass  # it was never there: nothing to take off
+    if add:
+        client.react(channel_id, message_id, add, bot_id=bot_id)
+    return {"ok": True, "channel_id": channel_id, "message_id": message_id, "added": add, "removed": drop}
 
 
 def handle_send(ctx: dict[str, Any]) -> dict[str, Any]:

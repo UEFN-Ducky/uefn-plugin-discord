@@ -1,7 +1,7 @@
 {
   "id": "discord",
   "kind": "plugin",
-  "version": "1.1.25",
+  "version": "1.1.26",
   "label": "Discord",
   "description": "Discord bot chat, !ducky commands, Rich Presence, and agent server-admin tools in UEFN Ducky",
   "min_app_version": "1.2.357",
@@ -156,6 +156,16 @@
       ],
       "nodes": [
         {
+          "id": "discord.react",
+          "label": "React to message",
+          "group": "Discord",
+          "description": "The bot reacts to the message that started the run: add Emoji and take Remove off (👀 while working, ✅ when done).",
+          "config_fields": [
+            {"id": "emoji", "label": "Emoji to add", "type": "string"},
+            {"id": "remove", "label": "Emoji to take off (optional)", "type": "string"}
+          ]
+        },
+        {
           "id": "discord.send",
           "label": "Send Discord message",
           "group": "Discord",
@@ -304,11 +314,11 @@
               },
               {
                 "id": "ack",
-                "type": "discord.send",
+                "type": "discord.react",
                 "x": 520,
                 "y": 40,
-                "config": {"channel_id": "", "text": "🦆 On it — reviewing this PR now. I'll reply here with the verdict."},
-                "label": "Say On it"
+                "config": {"emoji": "👀"},
+                "label": "👀 Looking"
               },
               {
                 "id": "a",
@@ -333,6 +343,14 @@
                 "label": "Post verdict"
               },
               {
+                "id": "done",
+                "type": "discord.react",
+                "x": 1240,
+                "y": 40,
+                "config": {"emoji": "✅", "remove": "👀"},
+                "label": "✅ Finished"
+              },
+              {
                 "id": "n",
                 "type": "discord.send",
                 "x": 520,
@@ -347,6 +365,7 @@
               {"source": "b", "target": "n", "kind": "false"},
               {"source": "ack", "target": "a", "kind": "main"},
               {"source": "a", "target": "r", "kind": "main"},
+              {"source": "r", "target": "done", "kind": "main"},
               {"source": "a", "target": "r", "kind": "data", "source_pin": "text", "target_pin": "text"}
             ]
           }

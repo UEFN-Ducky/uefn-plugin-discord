@@ -579,6 +579,19 @@ def send_message(
     return _normalize_message(created or {})
 
 
+def react(
+    channel_id: str, message_id: str, emoji: str, *, remove: bool = False, bot_id: str | None = None
+) -> dict[str, Any]:
+    """Add (or remove) the bot's own reaction, e.g. 👀 while working, ✅ when done."""
+    cid, mid, emo = (channel_id or "").strip(), (message_id or "").strip(), (emoji or "").strip()
+    if not cid or not mid or not emo:
+        raise DiscordError("channel_id, message_id and emoji are required")
+    path = f"/channels/{cid}/messages/{mid}/reactions/{urllib.parse.quote(emo, safe='')}/@me"
+    # PUT needs a body (Content-Length) or Discord answers 411.
+    _request("DELETE" if remove else "PUT", path, None if remove else {}, bot_id=bot_id or DEFAULT_BOT_ID)
+    return {"ok": True, "channel_id": cid, "message_id": mid, "emoji": emo, "removed": remove}
+
+
 def edit_message(
     channel_id: str, message_id: str, text: str, *, bot_id: str | None = None
 ) -> dict[str, Any]:

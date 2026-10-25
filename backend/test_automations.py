@@ -15,7 +15,8 @@ def test_plugin_json_declares_message_and_send() -> None:
     nodes = {row["id"] for row in auto["nodes"]}
     assert "discord.message" in triggers
     assert "discord.send" in nodes
-    fields = {f["id"] for f in auto["nodes"][0]["config_fields"]}
+    send_spec = next(row for row in auto["nodes"] if row["id"] == "discord.send")
+    fields = {f["id"] for f in send_spec["config_fields"]}
     assert {"channel_id", "text"} <= fields
     tmpls = auto["templates"]
     ids = {row["id"] for row in tmpls}
@@ -132,6 +133,23 @@ def test_pr_review_template_gates_and_wires() -> None:
     assert {"source": "a", "target": "r", "kind": "data", "source_pin": "text", "target_pin": "text"} in tmpl["graph"]["edges"]
     send = next(row for row in auto["nodes"] if row["id"] == "discord.send")
     assert [p["id"] for p in send["inputs"]] == ["text"]
+
+
+def test_react_swaps_eyes_for_check(monkeypatch) -> None:
+    calls: list[tuple] = []
+
+    def fake_react(channel_id, message_id, emoji, *, remove=False, bot_id=None):
+        calls.append((channel_id, message_id, emoji, remove))
+        return {"ok": True}
+
+    from . import client as real_client
+
+    monkeypatch.setattr(real_client, "react", fake_react)
+    out = automations.handle_react({"config": {"emoji": "✅", "remove": "👀"},
+                                    "payload": {"channel_id": "c1", "message_id": "m1"}})
+    assert out["ok"] is True
+    assert calls == [("c1", "m1", "👀", True), ("c1", "m1", "✅", False)]
+    assert automations.handle_react({"config": {"emoji": "x"}, "payload": {}})["ok"] is False
 
 
 def test_send_requires_channel_and_text() -> None:
