@@ -130,6 +130,7 @@ def test_pr_review_template_gates_and_wires() -> None:
     assert nodes["t"]["config"] == {"mentioned": "yes", "allowed": "yes"}
     assert nodes["b"]["config"] == {"field": "pr_owner", "equals": "UEFN-Ducky"}
     assert "--match-head-commit" in nodes["a"]["config"]["prompt"]
+    assert nodes["a"]["config"]["allow_web"] is True  # nobody watches it: no web question
     assert {"source": "a", "target": "r", "kind": "data", "source_pin": "text", "target_pin": "text"} in tmpl["graph"]["edges"]
     send = next(row for row in auto["nodes"] if row["id"] == "discord.send")
     assert [p["id"] for p in send["inputs"]] == ["text"]
