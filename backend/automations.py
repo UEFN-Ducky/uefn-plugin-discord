@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import time
 from typing import Any
 
 _api: Any = None
@@ -10,6 +11,8 @@ _api: Any = None
 # A GitHub pull request link: owner/repo + number. Only github.com, https only.
 _PR_LINK = re.compile(r"https://github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/pull/(\d+)\b")
 _CHUNK = 1900  # Discord's cap is 2000 per message
+_ROLES_TTL_S = 60.0
+_roles_cache: tuple[float, list[dict[str, str]]] = (0.0, [])
 
 
 def register_nodes(api: Any) -> None:
@@ -21,6 +24,7 @@ def register_nodes(api: Any) -> None:
     api.register_automation_node("discord.send", handle_send)
     # Not a step: fills the "Bot" dropdowns (options_from) with this PC's bots.
     api.register_automation_node("discord.bots", bot_options)
+    api.register_automation_node("discord.roles", role_options)
 
 
 def clear_api() -> None:
@@ -32,6 +36,31 @@ def bot_options(_ctx: Any = None) -> list[dict[str, str]]:
     from . import bots
 
     return [{"id": b.id, "label": b.label} for b in bots.list_bots()]
+
+
+def role_options(_ctx: Any = None) -> list[dict[str, str]]:
+    """The servers' roles for a workflow's Roles setting (cached: the list is built often)."""
+    global _roles_cache
+    at, rows = _roles_cache
+    if rows and time.monotonic() - at < _ROLES_TTL_S:
+        return rows
+    from . import bots, client
+
+    enabled = bots.enabled_bots()
+    out: list[dict[str, str]] = []
+    for b in enabled:
+        try:
+            roles = client.list_roles(bot_id=b.id)
+        except Exception:
+            continue
+        for r in roles:
+            # Skip @everyone (its id is the server's) and bot-managed roles.
+            if r.get("managed") or r.get("id") == b.guild_id:
+                continue
+            name = f"@{r.get('name')}"
+            out.append({"id": str(r.get("id")), "label": f"{b.label} · {name}" if len(enabled) > 1 else name})
+    _roles_cache = (time.monotonic(), out)
+    return out
 
 
 def _bot_user_id(bot_id: str) -> str:
@@ -66,6 +95,7 @@ def message_payload(msg: dict[str, Any], channel_id: str, bot_id: str, raw: dict
     )
     prompt = re.sub(rf"<@!?{re.escape(me)}>", "", content).strip() if mentioned else content
     pr = _PR_LINK.search(content)
+    member = data.get("member") if isinstance(data.get("member"), dict) else {}
     return {
         "channel_id": str(channel_id or "").strip(),
         "message_id": str(msg.get("id") or data.get("id") or ""),
@@ -78,6 +108,8 @@ def message_payload(msg: dict[str, Any], channel_id: str, bot_id: str, raw: dict
         # "yes"/"no" so a trigger's settings match them as typed (Only when @mentioned: yes).
         "mentioned": "yes" if mentioned else "no",
         "allowed": "yes" if _is_allowed(author_id, bot_id) else "no",
+        # The author's server roles (none in DMs): a workflow's Roles setting matches any one.
+        "role_ids": [str(r) for r in member.get("roles") or []],
         "pr_url": pr.group(0) if pr else "",
         "pr_repo": pr.group(1) if pr else "",
         "pr_owner": pr.group(1).split("/")[0] if pr else "",

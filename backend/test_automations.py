@@ -85,6 +85,10 @@ def test_payload_mention_allowed_and_pr_link(monkeypatch) -> None:
         "c1", "bob", {"mentions": [{"id": "42"}]},
     )
     assert out["mentioned"] == "yes" and out["allowed"] == "yes"
+    assert out["role_ids"] == []  # no member block (a DM): no roles
+    with_roles = automations.message_payload({"id": "m3", "author_id": "7", "content": "hi"}, "c1", "bob",
+                                             {"member": {"roles": [111, "222"]}})
+    assert with_roles["role_ids"] == ["111", "222"] and with_roles["allowed"] == "no"
     assert out["prompt"] == "https://github.com/UEFN-Ducky/UEFN-Ducky/pull/7"
     assert (out["pr_owner"], out["pr_repo"], out["pr_number"]) == ("UEFN-Ducky", "UEFN-Ducky/UEFN-Ducky", "7")
     other = automations.message_payload(

@@ -1,7 +1,7 @@
 {
   "id": "discord",
   "kind": "plugin",
-  "version": "1.1.24",
+  "version": "1.1.25",
   "label": "Discord",
   "description": "Discord bot chat, !ducky commands, Rich Presence, and agent server-admin tools in UEFN Ducky",
   "min_app_version": "1.2.357",
@@ -130,9 +130,15 @@
             },
             {
               "id": "allowed",
-              "label": "Only allowed users (Settings → Discord)",
+              "label": "Only users on the agent allow list (Settings → Discord)",
               "type": "select",
               "options": [{"id": "yes", "label": "Yes"}]
+            },
+            {
+              "id": "role_ids",
+              "label": "Only these roles (this workflow only; not the agent allow list)",
+              "type": "multiselect",
+              "options_from": "discord.roles"
             }
           ],
           "outputs": [
@@ -285,7 +291,7 @@
                 "y": 120,
                 "config": {"mentioned": "yes", "allowed": "yes"},
                 "label": "@bot from an allowed user",
-                "description": "Pick the Bot and paste the Channel id: every other channel and every user not allowed in Settings → Discord is ignored"
+                "description": "Pick the Bot, paste the Channel id, and pick Roles (then set allow list to Default): anyone else is ignored"
               },
               {
                 "id": "b",
