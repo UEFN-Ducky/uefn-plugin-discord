@@ -91,3 +91,40 @@ def test_builtin_join_routes_to_voice(monkeypatch):
     assert seen == {"bot_id": "default", "user_id": "u9", "text_channel_id": "c1", "engine": "local", "ducky": "verse"}
     assert "Joining" in sent[0]
     assert not commands._run_builtin("verse fix it", "c1", "default", "!bob", "u9")  # noqa: SLF001
+
+
+def test_status_lists_live_calls(monkeypatch):
+    s = voice._Session("b1", "", "local", {"name": "Verse Coder"})  # noqa: SLF001
+    s.channel, s.state, s.conv_id = "Meeting", "in call", "c1"
+    monkeypatch.setattr(voice, "_sessions", {"b1": s})
+    assert voice.status() == [{"bot_id": "b1", "ducky": "Verse Coder", "engine": "local",
+                               "channel": "Meeting", "state": "in call", "conv_id": "c1"}]
+    s.closed = True
+    assert voice.status() == []
+
+
+def test_hush_stops_audio_queue_and_the_answer(monkeypatch):
+    from . import host as host_mod
+
+    s = voice._Session("b1", "", "local", {})  # noqa: SLF001
+    s.conv_id = "c1"
+    sent, cancelled = [], []
+    monkeypatch.setattr(s, "send", lambda **kw: sent.append(kw))
+    monkeypatch.setattr(host_mod, "host", lambda name: cancelled.append if name == "cancel_agent" else None)
+    s.heard.put({"text": "old"})
+    s.hush()
+    assert {"cmd": "stop"} in sent and s.heard.empty() and cancelled == ["c1"]
+
+    sent.clear()
+    gen = s.hush_gen - 1  # speech that started before the hush
+    monkeypatch.setattr(s, "_tts", lambda t: "/tmp/x.wav")
+    s.speak("One. Two.", gen)
+    assert sent == []
+
+
+def test_leave_while_joining_never_joins(monkeypatch):
+    s = voice._Session("b1", "", "local", {})  # noqa: SLF001
+    monkeypatch.setattr(voice.bots, "get_token", lambda bid: "t")
+    monkeypatch.setattr(voice, "ensure_env", lambda engine, say: (s.stop(), "py")[1])  # Leave pressed mid-install
+    s.start()
+    assert s.closed and s.proc is None

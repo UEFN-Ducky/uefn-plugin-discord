@@ -204,6 +204,9 @@ class _Session:
         self.ready = threading.Event()
         self.heard: "queue.Queue[dict]" = queue.Queue()
         self.closed = False
+        self.channel = ""
+        self.state = "joining"
+        self.hush_gen = 0  # bumped by hush(): answers and speech started before it are dropped
 
     # -- messaging --
     def say(self, text: str) -> None:
@@ -231,6 +234,8 @@ class _Session:
         if not token:
             raise RuntimeError("this bot has no token (Settings → Discord)")
         py = ensure_env(self.engine, self.say)
+        if self.closed:  # left while the voice packages installed
+            return
         err = open(_base() / f"worker-{self.bot_id}.log", "w", encoding="utf-8")
         self.proc = subprocess.Popen(
             [str(py), "-I", str(_VOICE_DIR / "worker.py")],
@@ -240,7 +245,7 @@ class _Session:
         )
         threading.Thread(target=self._read, daemon=True, name=f"discord-voice-read-{self.bot_id}").start()
         threading.Thread(target=self._brain, daemon=True, name=f"discord-voice-brain-{self.bot_id}").start()
-        if not self.ready.wait(90):
+        if not self.ready.wait(90) and not self.closed:
             raise RuntimeError(f"voice worker didn't connect — see {_base() / f'worker-{self.bot_id}.log'}")
         self.send(cmd="stt", engine=self.engine)
 
@@ -255,6 +260,7 @@ class _Session:
             if kind == "ready":
                 self.ready.set()
             elif kind == "joined":
+                self.channel, self.state = str(ev.get("channel") or ""), "in call"
                 self.open_chat()
                 self.say(
                     f"🎙️ **{self.name}** joined **{ev.get('channel')}** ({self.engine} voice). "
@@ -266,6 +272,7 @@ class _Session:
             elif kind == "error":
                 self.say(f"🎙️ Voice: {ev.get('error')}")
             elif kind == "left":
+                self.state = "left"
                 self.say("🎙️ Left voice.")
         self.closed = True
         with _lock:
@@ -292,6 +299,30 @@ class _Session:
             except subprocess.TimeoutExpired:
                 p.kill()
         self.closed = True
+
+    def hush(self) -> None:
+        """Stop talking now: drop what's queued, stop the answer being thought up; stay in the call."""
+        self.hush_gen += 1
+        while True:
+            try:
+                self.heard.get_nowait()
+            except queue.Empty:
+                break
+        self.send(cmd="stop")
+        from .host import host
+
+        for cid in (self.conv_id, self.guest_conv_id):
+            if cid:
+                try:
+                    host("cancel_agent")(cid)
+                except Exception:
+                    pass
+
+    def public(self) -> dict[str, Any]:
+        return {
+            "bot_id": self.bot_id, "ducky": self.name, "engine": self.engine,
+            "channel": self.channel, "state": self.state, "conv_id": self.conv_id,
+        }
 
     # -- ears → ducky → mouth --
     def _brain(self) -> None:
@@ -388,6 +419,7 @@ class _Session:
             )
             mode = "ask"  # no tools, and much faster
         # A real person says "mm, one sec" when thinking takes a moment.
+        gen = self.hush_gen
         filler = threading.Timer(_FILLER_AFTER_S, self._filler)
         filler.daemon = True
         filler.start()
@@ -395,6 +427,8 @@ class _Session:
             outcome = run_message_and_wait(conv_id, prompt, mode, timeout_sec=_TIMEOUT_S, cancel_on_timeout=False)
         finally:
             filler.cancel()
+        if gen != self.hush_gen:  # told to stop while thinking: say nothing, keep the chat
+            return
         status = str(outcome.get("status") or "")
         if status != "done":
             if status != "timeout":
@@ -405,14 +439,15 @@ class _Session:
         if not reply:
             return
         self.say_async(f"🦆 **{self.name}:** {reply[:1900]}")
-        self.speak(spoken_text(reply))
+        self.speak(spoken_text(reply), gen)
 
     def say_async(self, text: str) -> None:
         """Text posts never hold up the voice (each REST call is ~200 ms)."""
         threading.Thread(target=self.say, args=(text,), daemon=True).start()
 
-    def speak(self, text: str) -> None:
+    def speak(self, text: str, gen: int | None = None) -> None:
         """Synthesize sentences in parallel; the first one plays as soon as it's ready."""
+        gen = self.hush_gen if gen is None else gen
         parts = sentences(text)
         if not parts:
             return
@@ -420,6 +455,8 @@ class _Session:
 
         with ThreadPoolExecutor(max_workers=3) as pool:
             for path in pool.map(self._tts, parts):  # map keeps order
+                if gen != self.hush_gen:
+                    break
                 if path:
                     self.send(cmd="play", path=path)
 
@@ -568,6 +605,9 @@ def join(
                 with _lock:
                     _sessions[bid] = sess
                 sess.start()
+            if sess.closed:  # left before it could join
+                sess.stop()
+                return
             sess.send(cmd="join", guild_id=guild_id, channel_id=voice_channel_id, user_id=user_id)
         except Exception as e:
             tmp = sess or _Session(bid, tc, eng, {})
@@ -589,6 +629,22 @@ def leave(bot_id: str) -> dict[str, Any]:
     time.sleep(0.5)
     sess.stop()
     return {"ok": True, "status": "left"}
+
+
+def status() -> list[dict[str, Any]]:
+    """Every bot that is in (or joining) a voice call."""
+    with _lock:
+        live = [s for s in _sessions.values() if not s.closed]
+    return [s.public() for s in live]
+
+
+def hush(bot_id: str) -> dict[str, Any]:
+    with _lock:
+        sess = _sessions.get(bot_id)
+    if not sess or sess.closed:
+        return {"ok": True, "status": "not in voice"}
+    sess.hush()
+    return {"ok": True, "status": "stopped"}
 
 
 def stop_all() -> None:

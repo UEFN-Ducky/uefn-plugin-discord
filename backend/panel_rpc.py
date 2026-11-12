@@ -363,6 +363,24 @@ def save_rich_presence(patch: dict[str, Any] | None = None) -> dict[str, Any]:
     return rich_presence.save_settings(patch if isinstance(patch, dict) else {})
 
 
+def voice_status(_unused: str = "") -> dict[str, Any]:
+    from . import voice
+
+    return {"ok": True, "calls": voice.status()}
+
+
+def voice_hush(bot_id: str = "") -> dict[str, Any]:
+    from . import voice
+
+    return voice.hush(_bot_id(bot_id))
+
+
+def voice_leave(bot_id: str = "") -> dict[str, Any]:
+    from . import voice
+
+    return voice.leave(_bot_id(bot_id))
+
+
 def register_panel_rpcs(api: Any) -> None:
     api.register_panel_rpc("list_bots", list_bots)
     api.register_panel_rpc("save_bot", save_bot)
@@ -380,4 +398,7 @@ def register_panel_rpcs(api: Any) -> None:
     api.register_panel_rpc("open_portal", open_portal)
     api.register_panel_rpc("send", send)
     api.register_panel_rpc("list_members", list_members)
+    api.register_panel_rpc("voice_status", voice_status)
+    api.register_panel_rpc("voice_hush", voice_hush)
+    api.register_panel_rpc("voice_leave", voice_leave)
     api.log("Discord panel RPCs registered")

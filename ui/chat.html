@@ -195,6 +195,23 @@
     color: var(--fg-dim, var(--muted));
   }
   #composer-status.err { color: var(--danger, var(--red)); }
+  #voice-bar { flex: 0 0 auto; border-bottom: 1px solid var(--border); }
+  #voice-bar:empty { display: none; }
+  .call {
+    display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+    background: color-mix(in srgb, var(--green) 10%, transparent);
+  }
+  .call.joining { background: color-mix(in srgb, var(--amber) 10%, transparent); }
+  .call .what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .call .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: 0 0 auto; }
+  .call.joining .dot { background: var(--amber); }
+  .call button {
+    border: 1px solid var(--border-light); border-radius: var(--radius-sm, 6px);
+    background: var(--btn-bg); color: var(--fg); padding: 3px 10px; font: inherit; cursor: pointer;
+  }
+  .call button:hover { background: var(--btn-hover); }
+  .call button.leave { border-color: color-mix(in srgb, var(--red) 50%, transparent); color: var(--red); }
+  .call button:disabled { opacity: 0.45; cursor: default; }
   .empty, .err { color: var(--fg-dim, var(--muted)); padding: 24px; text-align: center; }
   .err { color: var(--danger, var(--red)); }
   #member-list .err { padding: 12px; text-align: left; font-size: 12px; line-height: 1.35; }
@@ -215,6 +232,7 @@
       <select id="bot-select" title="Bot"></select>
       <div id="channel-title"># select a channel</div>
     </div>
+    <div id="voice-bar"></div>
     <div id="msgs"><div class="empty">Select a bot and channel to chat.</div></div>
     <div id="composer-wrap">
       <form id="composer">
@@ -848,8 +866,56 @@
     }
   });
 
+  // ---- voice calls: who's in one, open its chat, stop talking, leave ----
+  var voiceBar = document.getElementById("voice-bar");
+  var voiceKey = "";
+
+  function renderCalls(calls) {
+    var key = JSON.stringify(calls);
+    if (key === voiceKey) return;  // don't rebuild under the mouse every poll
+    voiceKey = key;
+    voiceBar.innerHTML = "";
+    calls.forEach(function (c) {
+      var row = document.createElement("div");
+      var joining = c.state !== "in call";
+      row.className = "call" + (joining ? " joining" : "");
+      var where = c.channel ? " in 🔊 " + escapeHtml(c.channel) : "";
+      row.innerHTML =
+        '<span class="dot"></span><span class="what">🎙️ <b>' + escapeHtml(c.ducky || "Ducky") + "</b>" +
+        (joining ? " is joining voice…" : where) + " · " + escapeHtml(c.engine || "") + "</span>";
+      function btn(label, cls, onClick, disabled) {
+        var b = document.createElement("button");
+        b.textContent = label;
+        if (cls) b.className = cls;
+        b.disabled = !!disabled;
+        b.onclick = function () {
+          b.disabled = true;
+          Promise.resolve(onClick()).catch(function () {}).then(function () {
+            b.disabled = false;
+            pollVoice();
+          });
+        };
+        row.appendChild(b);
+      }
+      btn("Open chat", "", function () {
+        return call("chat.open", { key: "voice-" + c.bot_id, conv_id: c.conv_id, title: "Discord · " + c.ducky, place: "right" });
+      }, !c.conv_id);
+      btn("Stop talking", "", function () { return rpc("voice_hush", { bot_id: c.bot_id }); }, joining);
+      btn("Leave", "leave", function () { return rpc("voice_leave", { bot_id: c.bot_id }); });
+      voiceBar.appendChild(row);
+    });
+  }
+
+  function pollVoice() {
+    return rpc("voice_status")
+      .then(function (res) { renderCalls((res && res.calls) || []); })
+      .catch(function () {});
+  }
+
   pullTheme();
   loadBots();
+  pollVoice();
+  window.setInterval(pollVoice, POLL_MS);
 })();
 </script>
 </body>
