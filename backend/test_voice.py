@@ -52,6 +52,36 @@ def test_only_allow_list_reaches_the_agent():
     assert owners == [] and len(guests) == 3
 
 
+def test_invite_code():
+    assert commands.invite_code("https://discord.gg/AbC-12") == "AbC-12"
+    assert commands.invite_code("join me https://discord.com/invite/xyz99 pls") == "xyz99"
+    assert commands.invite_code("no link here") == ""
+
+
+def test_voice_invite_joins_only_for_allow_list(monkeypatch):
+    from . import client
+
+    joined = []
+    monkeypatch.setattr(commands, "allowed_ids", lambda bid=None: {"me"})
+    monkeypatch.setattr(commands, "_claim_message", lambda *a, **k: True)
+    monkeypatch.setattr(commands, "_send", lambda *a, **k: None)
+    monkeypatch.setattr(commands.bots, "get_guild_id", lambda bid=None: "g1")
+    monkeypatch.setattr(
+        client, "resolve_invite",
+        lambda code, bot_id=None: {"guild_id": "g1", "channel_id": "vc9", "channel_type": 2, "channel": "Meeting"},
+    )
+    monkeypatch.setattr(voice, "join", lambda **kw: joined.append(kw) or {"ok": True, "engine": "openai"})
+    # Run the thread target inline.
+    monkeypatch.setattr(commands.threading, "Thread", lambda target, args, **k: type("T", (), {"start": lambda s: target(*args)})())
+
+    msg = {"id": "1", "author_id": "stranger", "content": "https://discord.gg/abc"}
+    assert not commands._maybe_voice_invite(msg, msg["content"], "dm1", "default")  # noqa: SLF001
+    assert joined == []
+    msg["author_id"] = "me"
+    assert commands._maybe_voice_invite(msg, msg["content"], "dm1", "default")  # noqa: SLF001
+    assert joined == [{"bot_id": "default", "voice_channel_id": "vc9", "text_channel_id": "dm1"}]
+
+
 def test_builtin_join_routes_to_voice(monkeypatch):
     seen = {}
     sent = []

@@ -739,6 +739,21 @@ def create_invite(
     }
 
 
+def resolve_invite(code: str, *, bot_id: str | None = None) -> dict[str, Any]:
+    """Where an invite code points: {guild_id, channel_id, channel_type}."""
+    c = urllib.parse.quote((code or "").strip(), safe="")
+    if not c:
+        raise DiscordError("No invite code")
+    inv = _request("GET", f"/invites/{c}", bot_id=bot_id or DEFAULT_BOT_ID) or {}
+    ch = inv.get("channel") or {}
+    return {
+        "guild_id": str((inv.get("guild") or {}).get("id") or inv.get("guild_id") or ""),
+        "channel_id": str(ch.get("id") or ""),
+        "channel_type": int(ch.get("type") or 0),
+        "channel": str(ch.get("name") or ""),
+    }
+
+
 if __name__ == "__main__":  # pragma: no cover - manual live/offline self-check
     # Offline check: normalize is pure and must not crash on sparse payloads.
     n = _normalize_message({"id": "42", "author": {"username": "ada"}, "content": "hi"})

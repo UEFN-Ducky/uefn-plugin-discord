@@ -38,6 +38,8 @@ and merges only after the owner presses Allow (`gh pr merge --match-head-commit`
   (e.g. ElevenLabs) speaks in that voice. Only allow-listed speakers reach the agent and its tools;
   everyone else gets chat-only answers from a separate chat. First join sets up a venv under
   `%LOCALAPPDATA%\UEFN-Ducky\discord_voice` (needs Python 3.11+, 1-3 min).
+- Or use Discord's **Invite to Voice** on the bot like on a person: an allow-listed sender's voice
+  invite (DM'd to the bot) makes it join that channel. Anyone else's invite is ignored.
 - `!bob leave` — hang up. `!bob show` (or say "show me the screen") — posts a screenshot.
 - `!bob invite` — link that adds the bot to another server you manage.
 

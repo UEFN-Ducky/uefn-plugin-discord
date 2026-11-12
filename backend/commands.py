@@ -21,6 +21,7 @@ ignored — no reply loops. No REST poller.
 from __future__ import annotations
 
 import os
+import re
 import sys
 import threading
 import time
@@ -174,7 +175,7 @@ def maybe_handle(message: dict[str, Any], channel_id: str, *, bot_id: str | None
     prefix_l = prefix.lower()
     # Exact prefix or prefix + space — "!ducky" / "!ducky x" yes; "!duckyx" no.
     if not (text_l == prefix_l or text_l.startswith(prefix_l + " ")):
-        return False
+        return _maybe_voice_invite(message, text, channel_id, bid)
     # Claim before any side effect so orphan pollers / other EXEs cannot multi-reply.
     if not _claim_message(
         str(message.get("id") or ""),
@@ -223,6 +224,54 @@ def maybe_handle(message: dict[str, Any], channel_id: str, *, bot_id: str | None
         name=f"discord-cmd-{bid}",
     ).start()
     return True
+
+
+_INVITE_RE = re.compile(r"(?:discord\.gg|discord(?:app)?\.com/invite)/([A-Za-z0-9-]{2,32})", re.I)
+_VOICE_TYPES = {2, 13}  # voice, stage
+
+
+def invite_code(text: str) -> str:
+    m = _INVITE_RE.search(text or "")
+    return m.group(1) if m else ""
+
+
+def _maybe_voice_invite(message: dict[str, Any], text: str, channel_id: str, bid: str) -> bool:
+    """Discord's "Invite to Voice" DMs the bot an invite link: an allow-listed sender's
+    voice invite makes the bot join, like inviting a person. Anyone else's is ignored."""
+    code = invite_code(text)
+    if not code:
+        return False
+    if not is_authorized(str(message.get("author_id") or ""), allowed_ids(bid)):
+        return False
+    if not _claim_message(str(message.get("id") or ""), channel_id=channel_id, content=text):
+        return False
+    threading.Thread(
+        target=_join_from_invite,
+        args=(code, channel_id, bid),
+        daemon=True,
+        name=f"discord-voice-invite-{bid}",
+    ).start()
+    return True
+
+
+def _join_from_invite(code: str, channel_id: str, bid: str) -> None:
+    try:
+        inv = client.resolve_invite(code, bot_id=bid)
+    except client.DiscordError as e:
+        _send(channel_id, f"🎙️ Couldn't open that invite: {e}", bid)
+        return
+    if inv["channel_type"] not in _VOICE_TYPES:
+        return  # a normal server/text invite, not a voice call — stay quiet
+    if inv["guild_id"] != (bots.get_guild_id(bid) or ""):
+        _send(channel_id, "🎙️ I can only join voice in the server I'm set up for (Settings → Discord).", bid)
+        return
+    from . import voice
+
+    out = voice.join(bot_id=bid, voice_channel_id=inv["channel_id"], text_channel_id=channel_id)
+    if out.get("ok"):
+        _send(channel_id, f"🎙️ On my way to **{inv['channel'] or 'voice'}** ({out.get('engine')})…", bid)
+    else:
+        _send(channel_id, f"🎙️ {out.get('error')}", bid)
 
 
 def match_profile(profiles: list[dict[str, Any]], rest: str) -> tuple[dict[str, Any] | None, str]:
