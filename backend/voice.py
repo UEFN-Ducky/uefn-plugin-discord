@@ -351,9 +351,10 @@ class _Session:
     def _answer(self, lines: list[tuple[str, str, str]], *, trusted: bool) -> None:
         """trusted (allow list) → the agent with tools; anyone else → chat-only ("ask") in its own chat."""
         from backend.agent.a2a_format import wrap_untrusted
-        from frontend.ui_web.agent_modes import run_message_and_wait
-
         from . import commands, screen
+        from .host import host
+
+        run_message_and_wait = host("run_message_and_wait")
 
         tc = self.text_channel_id
         if trusted and tc and any(_SHOW_RE.search(t) for _i, _u, t in lines):

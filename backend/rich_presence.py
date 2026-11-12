@@ -91,9 +91,9 @@ def status() -> dict[str, Any]:
 
 def _running_duckies() -> int:
     try:
-        from frontend.ui_web.agent_modes import list_running_agents
+        from .host import host
 
-        return len(list_running_agents())
+        return len(host("list_running_agents")())
     except Exception:
         return 0
 

@@ -165,9 +165,9 @@ def payload_for_event(
 
 def _label_for(conv_id: str) -> str:
     try:
-        from frontend.ui_web.project_chats import conversation_title
+        from .host import host
 
-        return conversation_title(conv_id) or "Ducky"
+        return host("conversation_title")(conv_id) or "Ducky"
     except Exception:
         return "Ducky"
 
@@ -177,11 +177,10 @@ def _preview_for(event: dict[str, Any], conv_id: str) -> str:
     if reason != "done":
         return str(event.get("detail") or reason)
     try:
-        from frontend.ui_web.agent_modes import _last_assistant_text
-        from frontend.ui_web.project_chats import load_conversation
+        from .host import host
 
-        conv = load_conversation(conv_id)
-        return str(_last_assistant_text(conv) if conv else "")[:400]
+        conv = host("load_conversation")(conv_id)
+        return str(host("_last_assistant_text")(conv) if conv else "")[:400]
     except Exception:
         return ""
 

@@ -339,9 +339,10 @@ def _roster_text(prefix: str) -> str:
 def _spawn_conv(profile: dict[str, Any]) -> str:
     from backend.tools.panel.ducky_panel import _profile_spawn_kwargs
     from frontend.settings import PanelSettings
-    from frontend.ui_web.agent_modes import notify_chats_changed
-    from frontend.ui_web.project_chats import create_conversation
+    from .host import host
 
+    create_conversation = host("create_conversation")
+    notify_chats_changed = host("notify_chats_changed")
     persona = _profile_spawn_kwargs(profile)
     name = str(profile.get("name") or "Ducky").strip()
     conv = create_conversation(
@@ -366,7 +367,9 @@ def _run_command(
             return
 
         from frontend.agent_profiles import list_agent_profiles_available
-        from frontend.ui_web.agent_modes import run_message_and_wait
+        from .host import host
+
+        run_message_and_wait = host("run_message_and_wait")
 
         profile, message = match_profile(list_agent_profiles_available(), rest)
         if profile is None:
