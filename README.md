@@ -30,6 +30,19 @@ separate from the agent allow list, so a role can start it without being able to
 The **Discord PR review** template reviews a `github.com/UEFN-Ducky` pull request link in a sandbox
 and merges only after the owner presses Allow (`gh pr merge --match-head-commit`).
 
+**Voice, screen and invite** (`!bob` = your bot's prefix; only people on the bot's allow list can run these):
+
+- `!bob join [openai|local] [ducky]` — the bot joins the voice channel you're in and talks with everyone.
+  `openai` uses Ducky's OpenAI transcription + OpenAI speech (Settings → LLMs key); `local` uses
+  faster-whisper and the Windows voice (free). The pick is remembered. A ducky with its own plugin voice
+  (e.g. ElevenLabs) speaks in that voice. Only allow-listed speakers reach the agent and its tools;
+  everyone else gets chat-only answers from a separate chat. First join sets up a venv under
+  `%LOCALAPPDATA%\UEFN-Ducky\discord_voice` (needs Python 3.11+, 1-3 min).
+- `!bob leave` — hang up. `!bob show` (or say "show me the screen") — posts a screenshot.
+- `!bob invite` — link that adds the bot to another server you manage.
+
+Bots can't Go Live or share video on Discord, so "show me" is a screenshot.
+
 This plugin is a **real Discord bot** (Gateway `MESSAGE_CREATE`) — not a REST poller.
 **Show offline** disconnects the gateway (bot appears Offline; no `!commands` until Online again).
 Enable **Message Content Intent** in the Dev Portal if gateway content is empty (we also hydrate via REST).

@@ -6,6 +6,10 @@ the same channel never double-reply.
     !ducky                      → roster of duckies (agent profiles)
     !ducky list                 → same
     !ducky <name> <message>     → run that ducky and post its reply back
+    !ducky join [openai|local] [name] → talk to a ducky in your voice channel (voice.py)
+    !ducky leave                → hang up
+    !ducky show                 → screenshot of this PC's screen
+    !ducky invite               → link to add the bot to another server
 
 Gateway ``MESSAGE_CREATE`` (presence.py) feeds every human message through
 ``maybe_handle``. A command runs on its own daemon thread (agent turns take
@@ -214,6 +218,7 @@ def maybe_handle(message: dict[str, Any], channel_id: str, *, bot_id: str | None
     threading.Thread(
         target=_run_command,
         args=(text, channel_id, str(message.get("author") or "someone"), bid, prefix),
+        kwargs={"author_id": str(message.get("author_id") or "")},
         daemon=True,
         name=f"discord-cmd-{bid}",
     ).start()
@@ -300,11 +305,15 @@ def _spawn_conv(profile: dict[str, Any]) -> str:
     return conv.id
 
 
-def _run_command(text: str, channel_id: str, author: str, bot_id: str, prefix: str) -> None:
+def _run_command(
+    text: str, channel_id: str, author: str, bot_id: str, prefix: str, *, author_id: str = ""
+) -> None:
     try:
         rest = text[len(prefix) :].strip()
         if not rest or rest.lower() in ("list", "help", "duckies"):
             _send(channel_id, _roster_text(prefix), bot_id)
+            return
+        if _run_builtin(rest, channel_id, bot_id, prefix, author_id):
             return
 
         from frontend.agent_profiles import list_agent_profiles_available
@@ -372,6 +381,45 @@ def _run_command(text: str, channel_id: str, author: str, bot_id: str, prefix: s
                 _busy.discard(key)
     except Exception as e:  # never let a command thread die silently
         _send(channel_id, f"🦆 Command failed: {e}", bot_id)
+
+
+def _run_builtin(rest: str, channel_id: str, bot_id: str, prefix: str, author_id: str) -> bool:
+    """join / leave / show / invite. True when handled."""
+    head, _, tail = rest.partition(" ")
+    head = head.lower()
+    if head in ("join", "call", "voice"):
+        from . import voice
+
+        engine, ducky = voice.parse_join_args(tail)
+        out = voice.join(
+            bot_id=bot_id, user_id=author_id, text_channel_id=channel_id, engine=engine, ducky=ducky
+        )
+        if out.get("ok"):
+            _send(channel_id, f"🎙️ Joining your voice channel ({out.get('engine')})…", bot_id)
+        else:
+            _send(channel_id, f"🎙️ {out.get('error')}", bot_id)
+        return True
+    if head in ("leave", "hangup", "bye"):
+        from . import voice
+
+        voice.leave(bot_id)
+        return True
+    if head in ("show", "screen", "screenshot"):
+        from . import screen
+
+        try:
+            screen.post_screenshot(channel_id, "🖥️ Here's the screen.", bot_id=bot_id)
+        except Exception as e:
+            _send(channel_id, f"🖥️ Screenshot failed: {e}", bot_id)
+        return True
+    if head == "invite":
+        try:
+            url = client.bot_invite_url(bot_id=bot_id)["url"]
+            _send(channel_id, f"🦆 Add me to a server you manage: <{url}>", bot_id)
+        except client.DiscordError as e:
+            _send(channel_id, f"🦆 Couldn't make the invite link: {e}", bot_id)
+        return True
+    return False
 
 
 # Back-compat alias used by older self-checks / imports.

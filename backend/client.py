@@ -193,6 +193,93 @@ def application_id(*, bot_id: str | None = None) -> str:
     return str((app or {}).get("id") or "")
 
 
+# View, Send, Embed, Attach, History, React, Connect, Speak, Voice Activity — no admin.
+INVITE_PERMISSIONS = (
+    (1 << 10) | (1 << 11) | (1 << 14) | (1 << 15) | (1 << 16) | (1 << 6)
+    | (1 << 20) | (1 << 21) | (1 << 25)
+)
+
+
+def invite_url_for(app_id: str) -> str:
+    return (
+        "https://discord.com/oauth2/authorize?client_id="
+        f"{urllib.parse.quote(str(app_id))}&scope=bot%20applications.commands"
+        f"&permissions={INVITE_PERMISSIONS}"
+    )
+
+
+def bot_invite_url(*, bot_id: str | None = None) -> dict[str, Any]:
+    """OAuth2 link that adds this bot to a server you manage (text + voice permissions)."""
+    app_id = application_id(bot_id=bot_id)
+    if not app_id:
+        raise DiscordError("Could not read the bot's application id")
+    return {"url": invite_url_for(app_id), "application_id": app_id}
+
+
+def send_file(
+    channel_id: str,
+    data: bytes,
+    filename: str,
+    *,
+    text: str = "",
+    mime: str = "image/png",
+    bot_id: str | None = None,
+) -> dict[str, Any]:
+    """Upload one file (e.g. a screenshot) to a channel. Can't ping @everyone or roles."""
+    import uuid
+
+    cid = (channel_id or "").strip()
+    if not cid:
+        raise DiscordError("No channel id")
+    token = get_token(bot_id or DEFAULT_BOT_ID)
+    if not token:
+        raise DiscordError("No Discord bot token set")
+    boundary = f"----ducky{uuid.uuid4().hex}"
+    body = multipart_body(
+        {"content": (text or "")[:2000], "allowed_mentions": {"parse": ["users"]}},
+        data,
+        filename,
+        mime,
+        boundary,
+    )
+    req = urllib.request.Request(
+        f"{_API}/channels/{cid}/messages",
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": f"Bot {token}",
+            "User-Agent": "UEFN-Ducky (https://duckyos.org, 1.0)",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30.0) as resp:
+            return _normalize_message(json.loads(resp.read() or b"{}"))
+    except urllib.error.HTTPError as e:
+        detail = ""
+        try:
+            detail = e.read().decode("utf-8", "replace")[:200]
+        except Exception:
+            pass
+        raise DiscordError(f"Discord {e.code}: {detail or e.reason}") from e
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        raise DiscordError(f"Discord upload failed: {e}") from e
+
+
+def multipart_body(payload: dict[str, Any], data: bytes, filename: str, mime: str, boundary: str) -> bytes:
+    safe_name = "".join(c for c in filename if c.isalnum() or c in "._-") or "file"
+    return b"".join(
+        [
+            f"--{boundary}\r\nContent-Disposition: form-data; name=\"payload_json\"\r\n"
+            f"Content-Type: application/json\r\n\r\n{json.dumps(payload)}\r\n".encode("utf-8"),
+            f"--{boundary}\r\nContent-Disposition: form-data; name=\"files[0]\"; "
+            f"filename=\"{safe_name}\"\r\nContent-Type: {mime}\r\n\r\n".encode("utf-8"),
+            data,
+            f"\r\n--{boundary}--\r\n".encode("utf-8"),
+        ]
+    )
+
+
 def list_channels(
     guild_id: str | None = None, *, text_only: bool = False, bot_id: str | None = None
 ) -> list[dict[str, Any]]:

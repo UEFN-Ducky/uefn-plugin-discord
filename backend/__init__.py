@@ -108,6 +108,12 @@ def _stop_runtime() -> None:
             rich_presence.stop()
         except Exception:
             pass
+        try:
+            from . import voice
+
+            voice.stop_all()
+        except Exception:
+            pass
         presence.set_plugin_active(False)
         try:
             poller.stop_all(join_timeout_s=2.0)

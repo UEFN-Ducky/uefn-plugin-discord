@@ -139,6 +139,24 @@ def test_message_and_invite(monkeypatch):
     assert invite["code"] == "abc123"
 
 
+def test_bot_invite_url(monkeypatch):
+    monkeypatch.setattr(client, "_request", lambda *a, **k: {"id": "987"})
+    out = client.bot_invite_url()
+    assert out["application_id"] == "987"
+    url = out["url"]
+    assert url.startswith("https://discord.com/oauth2/authorize?client_id=987&scope=bot%20applications.commands")
+    perms = int(url.rsplit("permissions=", 1)[1])
+    assert perms & (1 << 20) and perms & (1 << 21)  # Connect + Speak
+    assert not perms & (1 << 3)  # never Administrator
+
+
+def test_multipart_body_has_payload_and_file():
+    body = client.multipart_body({"content": "hi"}, b"PNGDATA", "../screen.png", "image/png", "B")
+    assert b'name="payload_json"' in body and b'{"content": "hi"}' in body
+    assert b'name="files[0]"; filename="..screen.png"' in body
+    assert b"PNGDATA" in body and body.endswith(b"--B--\r\n")
+
+
 def test_resolve_channel_type():
     assert client._resolve_channel_type("category") == 4  # noqa: SLF001
     assert client._resolve_channel_type(2) == 2

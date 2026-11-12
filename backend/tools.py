@@ -325,4 +325,29 @@ def register_tools(api: Any) -> None:
         )
         return tool_json(result, pretty=pretty)
 
+    @_tool(api, intent=_INTENT)
+    def discord_bot_invite_url(bot_id: str = "", pretty: bool = False) -> str:
+        """Link that adds the bot (e.g. Ducky BoB) to a Discord server you manage, with text + voice permissions.
+
+        Give the URL to the user; they open it, pick the server and press Authorize."""
+        result = _call(client.bot_invite_url, bot_id=bot_id.strip() or None)
+        return tool_json(result, pretty=pretty)
+
+    @_tool(api, intent=_INTENT)
+    def discord_send_screenshot(channel_id: str, text: str = "", bot_id: str = "", pretty: bool = False) -> str:
+        """Post a screenshot of this computer's screen (all monitors) to a Discord channel.
+
+        Use when the user asks to be shown the screen ("show me", in voice or text)."""
+        from . import screen
+
+        try:
+            msg = screen.post_screenshot(channel_id.strip(), text, bot_id=bot_id.strip() or None)
+        except DiscordError as e:
+            raise ValueError(str(e)) from e
+        except Exception as e:  # capture failure (no desktop, PowerShell blocked)
+            raise ValueError(f"Screenshot failed: {e}") from e
+        return tool_json({"sent": True, "message": msg}, pretty=pretty)
+
+    # ponytail: no voice join/leave tools — agents run in another process than the gateway,
+    # so a tool would start a second worker. Voice starts from `!bob join` (voice.py).
     api.log("Discord MCP tools registered")

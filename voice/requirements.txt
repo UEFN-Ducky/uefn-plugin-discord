@@ -1,0 +1,5 @@
+discord.py[voice]==2.7.1
+davey>=0.1.4,<0.2
+# DAVE (E2EE) voice receive: upstream PR #54, pinned to the reviewed head commit.
+discord-ext-voice-recv @ https://github.com/rdphillips7/discord-ext-voice-recv/archive/e0cc062ee2fe10311ffacdd4a4d00de707d6b1a7.zip
+imageio-ffmpeg>=0.5,<0.7
