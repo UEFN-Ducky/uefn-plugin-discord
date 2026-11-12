@@ -456,6 +456,15 @@ def _run_builtin(rest: str, channel_id: str, bot_id: str, prefix: str, author_id
 
         voice.leave(bot_id)
         return True
+    if head == "wake":
+        from . import voice
+
+        words = voice.save_wake(tail) if tail.strip() else voice.load_wake()
+        if words:
+            _send(channel_id, f"🎙️ Wake word: **{', '.join(words)}** — say “hey {words[0]}, …” in the call. `{prefix} wake off` to answer everything.", bot_id)
+        else:
+            _send(channel_id, f"🎙️ No wake word: I answer everything said in the call. `{prefix} wake bob` to turn it back on.", bot_id)
+        return True
     if head in ("show", "screen", "screenshot"):
         from . import screen
 

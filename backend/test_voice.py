@@ -32,6 +32,26 @@ def test_speak_queues_in_order(monkeypatch):
     assert sent == ["/tmp/Fir.wav", "/tmp/Sec.wav", "/tmp/Thi.wav"]
 
 
+def test_wake_word():
+    w = ["bob"]
+    assert voice.heard_for_bob("Hey, Bob! What's in my level?", w, False) == "What's in my level?"
+    assert voice.heard_for_bob("bob", w, False) == ""  # just called -> "Yeah?"
+    assert voice.heard_for_bob("did you eat lunch", w, False) is None  # not for BoB
+    assert voice.heard_for_bob("and make it red", w, True) == "and make it red"  # still talking with him
+    assert voice.heard_for_bob("bobcat facts", w, False) is None  # whole word only
+    assert voice.heard_for_bob("anything", [], False) == "anything"  # wake off
+    assert voice.heard_for_bob("Okay, Ducky, build it", ["okay ducky"], False) == "build it"
+
+
+def test_wake_setting_roundtrip(monkeypatch, tmp_path):
+    monkeypatch.setattr(voice, "_base", lambda: tmp_path)
+    assert voice.load_wake() == [voice.DEFAULT_WAKE]
+    voice.save_engine("local")
+    assert voice.save_wake("Jarvis, hey bob") == ["jarvis", "hey bob"]
+    assert voice.load_engine() == "local"  # saving one setting keeps the other
+    assert voice.save_wake("off") == []
+
+
 def test_noise_filter():
     assert voice.is_noise(" Thank you. ") and voice.is_noise("")
     assert not voice.is_noise("build my level")

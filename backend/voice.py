@@ -125,18 +125,60 @@ def is_noise(text: str) -> bool:
     return (text or "").strip().lower() in _NOISE or len((text or "").strip()) < 2
 
 
-def load_engine() -> str:
+def _settings() -> dict[str, Any]:
     try:
-        saved = json.loads((_base() / "settings.json").read_text(encoding="utf-8")).get("engine")
-        if saved in ENGINES:
-            return saved
+        data = json.loads((_base() / "settings.json").read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
     except (OSError, ValueError):
-        pass
+        return {}
+
+
+def _save_settings(**changes: Any) -> None:
+    (_base() / "settings.json").write_text(json.dumps({**_settings(), **changes}), encoding="utf-8")
+
+
+def load_engine() -> str:
+    saved = _settings().get("engine")
+    if saved in ENGINES:
+        return saved
     return "openai" if _openai_key() else "local"
 
 
 def save_engine(engine: str) -> None:
-    (_base() / "settings.json").write_text(json.dumps({"engine": engine}), encoding="utf-8")
+    _save_settings(engine=engine)
+
+
+# Wake word: BoB only answers when called ("hey bob, …"), like a person in a room. After
+# he's called or has answered, that speaker can keep talking without it for _AWAKE_S.
+DEFAULT_WAKE = "bob"
+_AWAKE_S = 20.0
+
+
+def load_wake() -> list[str]:
+    """Wake phrases (comma separated, lowercase). [] = answer everything."""
+    raw = str(_settings().get("wake", DEFAULT_WAKE) or "").strip().lower()
+    if raw in ("", "off", "none"):
+        return []
+    return [w.strip() for w in raw.split(",") if w.strip()]
+
+
+def save_wake(phrase: str) -> list[str]:
+    _save_settings(wake=(phrase or "").strip())
+    return load_wake()
+
+
+def heard_for_bob(text: str, wake: list[str], awake: bool) -> str | None:
+    """What BoB acts on: the words after a wake phrase ("" = just called), the whole
+    sentence while that speaker is still in a conversation with him, else None (ignore)."""
+    if not wake:
+        return text
+    for w in wake:
+        # Whisper writes "Hey, Bob!" / "hey bob": words may be split by commas or spaces.
+        pat = r"\b" + r"[\s,.!?-]+".join(re.escape(p) for p in w.split()) + r"\b[\s,.!?:;-]*"
+        m = re.search(pat, text, re.I)
+        if m:
+            return text[m.end():].strip()
+    return text if awake else None
 
 
 def _openai_key() -> str:
@@ -207,6 +249,7 @@ class _Session:
         self.channel = ""
         self.state = "joining"
         self.hush_gen = 0  # bumped by hush(): answers and speech started before it are dropped
+        self.awake_until: dict[str, float] = {}  # speaker id -> talking with BoB until (monotonic)
 
     # -- messaging --
     def say(self, text: str) -> None:
@@ -265,7 +308,12 @@ class _Session:
                 self.say(
                     f"🎙️ **{self.name}** joined **{ev.get('channel')}** ({self.engine} voice). "
                     f"Talking through the Ducky chat “Discord · {self.name}”. "
-                    "Just talk — say “show me the screen” for a screenshot. `!bob leave` to hang up."
+                    + (
+                        f"Say **“{load_wake()[0]}”** to talk to me (“hey {load_wake()[0]}, …”) — change it with `!bob wake <word>`. "
+                        if load_wake()
+                        else "I answer everything said in the call (`!bob wake bob` to need a wake word). "
+                    )
+                    + "Say “show me the screen” for a screenshot. `!bob leave` to hang up."
                 )
             elif kind == "utterance":
                 self.heard.put(ev)
@@ -339,11 +387,26 @@ class _Session:
                     batch.append(self.heard.get_nowait())
                 except queue.Empty:
                     break
+            wake = load_wake()
+            now = time.monotonic()
             lines = []
+            called = False
             for ev in batch:
                 text = self._transcribe(ev)
-                if not is_noise(text):
-                    lines.append((str(ev.get("user_id") or ""), str(ev.get("user") or "someone"), text))
+                if is_noise(text):
+                    continue
+                uid = str(ev.get("user_id") or "")
+                got = heard_for_bob(text, wake, self.awake_until.get(uid, 0.0) > now)
+                if got is None:
+                    continue  # people talking to each other, not to BoB
+                self.awake_until[uid] = now + _AWAKE_S
+                if got:
+                    lines.append((uid, str(ev.get("user") or "someone"), got))
+                else:
+                    called = True  # just "hey bob"
+            if called and not lines:
+                self.speak(random.choice(("Yeah?", "Hm?", "I'm here.", "What's up?")))
+                continue
             if not lines:
                 continue
             self.say_async("\n".join(f"🗣️ **{u}:** {t}" for _i, u, t in lines)[:1990])
@@ -355,6 +418,9 @@ class _Session:
                     self._answer(group, trusted=trusted)
                 except Exception as e:  # never let the brain thread die
                     self.say(f"🎙️ {self.name} hit an error: {e}")
+            done = time.monotonic() + _AWAKE_S  # keep the conversation open after he answers
+            for uid, _u, _t in lines:
+                self.awake_until[uid] = done
 
     def allowed(self) -> set[str]:
         from . import commands
