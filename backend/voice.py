@@ -271,6 +271,8 @@ class _Session:
                 self.heard.put(ev)
             elif kind == "error":
                 self.say(f"🎙️ Voice: {ev.get('error')}")
+            elif kind == "notice":
+                self.say(f"🎙️ {ev.get('text')}")
             elif kind == "left":
                 self.state = "left"
                 self.say("🎙️ Left voice.")

@@ -14,7 +14,7 @@ stdin (JSON lines from the plugin):
 stdout (JSON lines to the plugin):
   {"ev": "ready"} | {"ev": "joined", "channel_id", "channel"} | {"ev": "left"}
   {"ev": "utterance", "user_id", "user", "wav", "text"?}       text only when engine=local
-  {"ev": "error", "error"}
+  {"ev": "error", "error"} | {"ev": "notice", "text"}
 """
 
 from __future__ import annotations
@@ -227,13 +227,19 @@ class Worker:
                 path = write_wav(pcm)
                 text = None
                 if self.engine == "local":
-                    text = await asyncio.to_thread(self._local_stt, path)
+                    try:
+                        text = await asyncio.to_thread(self._local_stt, path)
+                    except Exception as e:  # one bad clip must never stop the ears for the whole call
+                        _unlink(path)
+                        emit(ev="error", error=f"couldn't transcribe: {e}")
+                        continue
                 emit(ev="utterance", user_id=str(uid), user=name, wav=path, text=text)
 
     def _local_stt(self, path: str) -> str:
         if self._whisper is None:
             from faster_whisper import WhisperModel
 
+            emit(ev="notice", text="Loading the speech model (the first time it downloads about 150 MB)…")
             self._whisper = WhisperModel(os.environ.get("BOB_WHISPER_MODEL", "base"), compute_type="int8")
         segments, _info = self._whisper.transcribe(path, vad_filter=True, beam_size=1)
         return " ".join(s.text.strip() for s in segments).strip()
@@ -260,7 +266,7 @@ class Worker:
     async def main(self) -> None:
         self.loop = asyncio.get_running_loop()
         threading.Thread(target=self._read_stdin, daemon=True).start()
-        asyncio.create_task(self.flusher())
+        self._flusher = asyncio.create_task(self.flusher())  # kept: an unreferenced task can be garbage-collected
         await self.client.start(os.environ["DISCORD_TOKEN"])
 
     def _read_stdin(self) -> None:
