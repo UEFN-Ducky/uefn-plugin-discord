@@ -255,8 +255,10 @@ class _Session:
             if kind == "ready":
                 self.ready.set()
             elif kind == "joined":
+                self.open_chat()
                 self.say(
                     f"🎙️ **{self.name}** joined **{ev.get('channel')}** ({self.engine} voice). "
+                    f"Talking through the Ducky chat “Discord · {self.name}”. "
                     "Just talk — say “show me the screen” for a screenshot. `!bob leave` to hang up."
                 )
             elif kind == "utterance":
@@ -269,6 +271,17 @@ class _Session:
         with _lock:
             if _sessions.get(self.bot_id) is self:
                 _sessions.pop(self.bot_id, None)
+
+    def open_chat(self) -> None:
+        """The voice call's Ducky chat exists (and shows in the app) as soon as BoB joins."""
+        if self.conv_id:
+            return
+        try:
+            from . import commands
+
+            self.conv_id = commands._spawn_conv(self.profile)  # noqa: SLF001
+        except Exception as e:
+            self.say(f"🎙️ Couldn't open the Ducky chat: {e}")
 
     def stop(self) -> None:
         self.send(cmd="quit")
