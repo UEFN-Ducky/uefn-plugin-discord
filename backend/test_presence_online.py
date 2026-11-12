@@ -58,6 +58,42 @@ def test_bump_presence_marks_dirty() -> None:
         presence._started_bots.discard(bid)
 
 
+def test_newer_copy_retires_older_gateway(monkeypatch) -> None:
+    """A Store update loads a new copy: the old copy's loop must stop, not keep answering."""
+    import sys
+
+    monkeypatch.setattr(sys, presence._GEN_ATTR, 0, raising=False)
+    monkeypatch.setattr(presence, "_my_gen", 0)
+    gen = presence.new_generation()
+    assert not presence.superseded() and not presence.retired()
+    setattr(sys, presence._GEN_ATTR, gen + 1)  # the update's copy took over
+    assert presence.superseded() and presence.retired()
+    with presence._lock:
+        presence._started_bots.add("old-bot")
+    presence._run("old-bot")  # returns at once instead of reconnecting
+    with presence._lock:
+        assert "old-bot" not in presence._started_bots
+
+
+def test_evict_legacy_sessions_flips_bots_off_then_restores(monkeypatch) -> None:
+    import threading
+
+    raw = [{"id": "default", "enabled": True, "prefix": "!bob"}]
+    writes: list = []
+    monkeypatch.setattr(presence._bots, "_read_raw", lambda: [dict(r) for r in raw])
+    monkeypatch.setattr(presence._bots, "_write_raw", lambda rows: writes.append(rows))
+    assert presence.evict_legacy_sessions(wait_s=0) is False  # nothing old running
+    stop = threading.Event()
+    t = threading.Thread(target=stop.wait, name="discord-presence-default", daemon=True)
+    t.start()
+    try:
+        assert presence.evict_legacy_sessions(wait_s=0) is True
+    finally:
+        stop.set()
+    assert writes[0][0]["enabled"] is False
+    assert writes[-1] == raw  # file put back exactly
+
+
 if __name__ == "__main__":
     test_desired_presence_online_by_default()
     test_desired_presence_invisible_when_show_offline()

@@ -18,6 +18,7 @@ import os
 import socket
 import ssl
 import struct
+import sys
 import threading
 import time
 from typing import Any
@@ -49,6 +50,12 @@ _LEVEL_BASIC = 0
 _lock = threading.Lock()
 # When False, presence threads park (plugin disabled / Store update reload).
 _plugin_active = True
+# Store update = a new copy of this module in the same process. Each copy that starts the
+# runtime takes the next generation (kept on ``sys`` so every copy sees it); a session from
+# an older copy sees a newer number and hangs up, so only the newest code hears messages.
+_GEN_ATTR = "_uefn_discord_gateway_gen"
+_my_gen = 0
+_LEGACY_THREAD_PREFIX = "discord-presence-"  # copies before 1.2.3 never check the generation
 # bot_id -> set once that bot's presence thread has been spawned
 _started_bots: set[str] = set()
 # bot_id -> intent ladder level after 4014 demotions
@@ -688,6 +695,8 @@ def _session(token: str, bot_id: str, *, intents: int) -> int:
         next_presence = time.monotonic() + 2.0  # assert Online soon after IDENTIFY
         sock.settimeout(1.0)
         while True:
+            if retired():
+                return 0  # plugin turned off or updated: the newer copy takes over
             if _client_get_token(bot_id) != token:
                 return 0  # token changed/cleared — reconnect (or exit) with the new one
             profile = _bots.get_bot(bot_id)
@@ -769,6 +778,46 @@ def _session(token: str, bot_id: str, *, intents: int) -> int:
     return close_code
 
 
+def new_generation() -> int:
+    """This copy owns the gateway from now on; older copies' sessions retire within ~1 s."""
+    global _my_gen
+    gen = int(getattr(sys, _GEN_ATTR, 0) or 0) + 1
+    setattr(sys, _GEN_ATTR, gen)
+    _my_gen = gen
+    return gen
+
+
+def superseded() -> bool:
+    return int(getattr(sys, _GEN_ATTR, _my_gen) or 0) != _my_gen
+
+
+def retired() -> bool:
+    with _lock:
+        active = _plugin_active
+    return not active or superseded()
+
+
+def evict_legacy_sessions(wait_s: float = 2.5) -> bool:
+    """Copies before 1.2.3 never hang up on their own, so after a Store update they kept
+    answering with old code until Ducky restarted. They do re-read bots.json every second
+    and leave when their bot is disabled (their unload already stopped them reconnecting),
+    so switch the bots off on disk for a moment, then put the file back exactly as it was."""
+    legacy = [
+        t for t in threading.enumerate() if t.name.startswith(_LEGACY_THREAD_PREFIX) and t.is_alive()
+    ]
+    if not legacy:
+        return False
+    raw = _bots._read_raw()  # noqa: SLF001
+    if not raw:
+        return False
+    try:
+        _bots._write_raw([{**r, "enabled": False} if isinstance(r, dict) else r for r in raw])  # noqa: SLF001
+        time.sleep(wait_s)
+    finally:
+        _bots._write_raw(raw)  # noqa: SLF001
+    return True
+
+
 def set_plugin_active(active: bool) -> None:
     """Park or resume all presence sessions when the Store plugin is toggled."""
     global _plugin_active
@@ -800,6 +849,10 @@ def _park_until_online(bot_id: str) -> None:
 def _run(bot_id: str) -> None:
     backoff = _RECONNECT_MIN_S
     while True:
+        if superseded():
+            with _lock:
+                _started_bots.discard(bot_id)
+            return  # a newer copy of the plugin runs this bot now
         with _lock:
             active = _plugin_active
         if not active:
@@ -870,7 +923,7 @@ def ensure_started(bot_id: str | None = None) -> None:
         if bid in _started_bots:
             return
         _started_bots.add(bid)
-    threading.Thread(target=_run, args=(bid,), daemon=True, name=f"discord-presence-{bid}").start()
+    threading.Thread(target=_run, args=(bid,), daemon=True, name=f"discord-gateway-{bid}").start()
 
 
 def ensure_all_enabled() -> None:

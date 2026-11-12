@@ -90,6 +90,12 @@ def _start_runtime() -> None:
         poller.stop_all()
     except Exception:
         pass
+    # Store update without a restart: retire every older copy's gateway before ours connects.
+    presence.new_generation()
+    try:
+        presence.evict_legacy_sessions()
+    except Exception:
+        pass
     presence.set_plugin_active(True)
     presence.ensure_all_enabled()
     poller.sync_enabled_bots()
