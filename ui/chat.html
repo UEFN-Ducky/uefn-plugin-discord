@@ -215,6 +215,15 @@
   .empty, .err { color: var(--fg-dim, var(--muted)); padding: 24px; text-align: center; }
   .err { color: var(--danger, var(--red)); }
   #member-list .err { padding: 12px; text-align: left; font-size: 12px; line-height: 1.35; }
+  .setup { margin: 10px; padding: 12px; border: 1px solid var(--border-light); border-radius: var(--radius-sm);
+    background: var(--card); line-height: 1.45; }
+  .setup b { display: block; margin-bottom: 4px; color: var(--fg); }
+  .setup p { margin: 0 0 8px; color: var(--fg-dim); }
+  .setup ol { margin: 0 0 10px; padding-left: 18px; color: var(--fg); }
+  .setup button { width: 100%; padding: 7px 8px; border: 0; border-radius: var(--radius-sm); cursor: pointer;
+    background: var(--groupchat-accent); color: #fff; font: inherit; font-weight: 600; }
+  .setup button:hover { filter: brightness(1.1); }
+  .setup .dim { margin: 8px 0 0; font-size: 11px; color: var(--muted); }
   @media (max-width: 720px) {
     #app { grid-template-columns: 140px 1fr; }
     #members { display: none; }
@@ -300,6 +309,7 @@
   var botId = "";
   var botLabel = "";
   var postAs = "";
+  var savedChannelId = "";
   var channelId = "";
   var channelName = "";
   var lastId = "";
@@ -639,6 +649,7 @@
       var cur = bots.find(function (b) { return b.id === botId; });
       botLabel = (cur && (cur.label || cur.id)) || botId;
       postAs = (cur && cur.post_as) || postAs || "";
+      savedChannelId = (cur && cur.channel_id) || "";
       return loadChannels().then(function () {
         return loadStatus();
       });
@@ -674,6 +685,11 @@
         };
         channelList.appendChild(btn);
       });
+      // Open where BoB was last used (or the first channel): never an empty panel.
+      if (!channelId) {
+        var start = channels.find(function (c) { return c.id === savedChannelId; }) || channels[0];
+        openChannel(start.id, start.name);
+      }
       loadMembers();
       startMembersPoll();
     });
@@ -714,7 +730,23 @@
       });
   }
 
-  function renderMemberGroups(groups, hint) {
+  function renderIntentSetup() {
+    memberList.innerHTML =
+      '<div class="setup"><b>Show who\'s here</b>' +
+      "<p>Discord hides the member list until you turn on two switches for " + escapeHtml(botLabel || "your bot") + ":</p>" +
+      "<ol><li>Server Members Intent</li><li>Presence Intent</li></ol>" +
+      '<button type="button" id="open-portal">Open bot settings in Discord ↗</button>' +
+      '<p class="dim">Bot → Privileged Gateway Intents → turn both on → Save Changes. Members show up here by themselves.</p></div>';
+    document.getElementById("open-portal").onclick = function () {
+      rpc("open_portal", { bot_id: botId }).catch(function () {});
+    };
+  }
+
+  function renderMemberGroups(groups, hint, fix) {
+    if (fix === "intents" && (!groups || !groups.length)) {
+      renderIntentSetup();
+      return;
+    }
     memberList.innerHTML = "";
     if (!groups || !groups.length) {
       memberList.innerHTML =
@@ -755,7 +787,7 @@
             '<div class="err">' + escapeHtml((res && res.error) || "—") + "</div>";
           return;
         }
-        renderMemberGroups(res.groups || [], res.error || "");
+        renderMemberGroups(res.groups || [], res.error || "", res.fix || "");
       })
       .catch(function (e) {
         if (!quiet) {

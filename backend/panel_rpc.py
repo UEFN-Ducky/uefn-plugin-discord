@@ -238,6 +238,13 @@ def _members_intent_hint(err: str, intent_level: int) -> str:
     return err or "Member list unavailable"
 
 
+def intents_fix(err: str, intent_level: int) -> str:
+    """"intents" when the member list is blocked by the Dev Portal switches, else ""."""
+    low = (err or "").lower()
+    blocked = "403" in low or "missing access" in low or "privileged" in low or intent_level <= 0
+    return "intents" if blocked else ""
+
+
 def list_members(bot_id: str = "") -> dict[str, Any]:
     from . import client, presence
 
@@ -262,6 +269,7 @@ def list_members(bot_id: str = "") -> dict[str, Any]:
             "ready": False,
             "intent_level": level,
             "error": hint,
+            "fix": intents_fix(str(e), level),  # the panel shows a setup card with a portal button
         }
     people = [
         {
@@ -284,6 +292,7 @@ def list_members(bot_id: str = "") -> dict[str, Any]:
             "ready": False,
             "intent_level": level,
             "error": _members_intent_hint("", level),
+            "fix": intents_fix("", level),
         }
     return {
         "ok": True,
