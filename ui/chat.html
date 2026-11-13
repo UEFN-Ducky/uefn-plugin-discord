@@ -743,7 +743,8 @@
   }
 
   function renderMemberGroups(groups, hint, fix) {
-    if (fix === "intents" && (!groups || !groups.length)) {
+    // fix comes from 1.2.5+ backends; an older running backend only sends the "…Intent…" hint.
+    if ((fix === "intents" || /Gateway Intents|Members Intent/i.test(hint || "")) && (!groups || !groups.length)) {
       renderIntentSetup();
       return;
     }
