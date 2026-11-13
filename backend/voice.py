@@ -121,6 +121,20 @@ def sentences(text: str) -> list[str]:
     return out
 
 
+def speech_for(reply: str) -> str:
+    """What to say for a finished agent reply: Ducky's spoken summary (cheap voice model,
+    no code or paths read out), else the reply with markdown stripped."""
+    try:
+        from backend.voice.summary import summarize_for_speech
+
+        out = summarize_for_speech(reply)
+        if out.get("ok") and str(out.get("text") or "").strip():
+            return spoken_text(str(out["text"]))
+    except Exception:
+        pass
+    return spoken_text(reply)
+
+
 def is_noise(text: str) -> bool:
     return (text or "").strip().lower() in _NOISE or len((text or "").strip()) < 2
 
@@ -251,6 +265,12 @@ class _Session:
         self.hush_gen = 0  # bumped by hush(): answers and speech started before it are dropped
         self.awake_until: dict[str, float] = {}  # speaker id -> talking with BoB until (monotonic)
         self.wake_hinted: set[str] = set()  # speakers already told about the wake word
+        # Talker + thinker: the live lane answers at once; real work runs here in the background.
+        self.recent: list[tuple[str, str]] = []  # (role, text) the talker sees as the call so far
+        self.agent_lock = threading.Lock()
+        self.agent_pending: list[tuple[str, str, str]] = []
+        self.agent_busy = False
+        self.work_status = ""
 
     # -- messaging --
     def say(self, text: str) -> None:
@@ -354,6 +374,8 @@ class _Session:
     def hush(self) -> None:
         """Stop talking now: drop what's queued, stop the answer being thought up; stay in the call."""
         self.hush_gen += 1
+        with self.agent_lock:
+            self.agent_pending = []  # work not started yet is dropped too
         while True:
             try:
                 self.heard.get_nowait()
@@ -422,7 +444,7 @@ class _Session:
                 if not group:
                     continue
                 try:
-                    self._answer(group, trusted=trusted)
+                    self._live(group, trusted=trusted)
                 except Exception as e:  # never let the brain thread die
                     self.say(f"🎙️ {self.name} hit an error: {e}")
             done = time.monotonic() + _AWAKE_S  # keep the conversation open after he answers
@@ -454,7 +476,64 @@ class _Session:
             except OSError:
                 pass
 
-    def _answer(self, lines: list[tuple[str, str, str]], *, trusted: bool) -> None:
+    def _live(self, lines: list[tuple[str, str, str]], *, trusted: bool) -> None:
+        """Talker first: Ducky's live voice lane (a fast voice model) answers right away from
+        the call so far and what the agent is doing. Real work ("HANDOFF") goes to the agent in
+        the background, so BoB keeps talking while it works and speaks its result when done."""
+        try:
+            from backend.voice.lane import run_voice_lane
+        except ImportError:  # an app without the live lane: the agent answers everything
+            self._answer(lines, trusted=trusted)
+            return
+        heard = "\n".join(f"{u}: {t}" for _i, u, t in lines)
+        gen = self.hush_gen
+        out = run_voice_lane(
+            heard, recent=list(self.recent), work_status=self.work_status, agent_running=self.agent_busy
+        )
+        if gen != self.hush_gen:
+            return
+        if not out.get("ok") and not trusted:
+            self._answer(lines, trusted=False)  # no voice model: guests still get a chat answer
+            return
+        self.recent.append(("user", heard))
+        spoken = str(out.get("text") or "").strip()
+        wants_agent = out.get("action") == "agent"
+        if wants_agent and not trusted:
+            spoken, wants_agent = "Happy to chat, but only the people I work for can ask me to do things.", False
+        if spoken:
+            self.recent.append(("assistant", spoken))
+            self.say_async(f"🦆 **{self.name}:** {spoken}")
+            self.speak(spoken, gen)
+        del self.recent[:-12]
+        if wants_agent:
+            self._queue_agent(lines)
+
+    def _queue_agent(self, lines: list[tuple[str, str, str]]) -> None:
+        with self.agent_lock:
+            self.agent_pending.extend(lines)
+            if self.agent_busy:
+                return  # the running loop picks it up when the current job ends
+            self.agent_busy = True
+        threading.Thread(target=self._agent_loop, daemon=True, name=f"discord-voice-agent-{self.bot_id}").start()
+
+    def _agent_loop(self) -> None:
+        try:
+            while not self.closed:
+                with self.agent_lock:
+                    batch, self.agent_pending = self.agent_pending, []
+                    if not batch:
+                        return
+                self.work_status = "working on: " + "; ".join(t for _i, _u, t in batch)[:160]
+                try:
+                    self._answer(batch, trusted=True, filler=False)
+                except Exception as e:
+                    self.say(f"🎙️ {self.name} hit an error: {e}")
+        finally:
+            with self.agent_lock:
+                self.agent_busy = False
+                self.work_status = ""
+
+    def _answer(self, lines: list[tuple[str, str, str]], *, trusted: bool, filler: bool = True) -> None:
         """trusted (allow list) → the agent with tools; anyone else → chat-only ("ask") in its own chat."""
         from backend.agent.a2a_format import wrap_untrusted
         from . import commands, screen
@@ -495,13 +574,14 @@ class _Session:
             mode = "ask"  # no tools, and much faster
         # A real person says "mm, one sec" when thinking takes a moment.
         gen = self.hush_gen
-        filler = threading.Timer(_FILLER_AFTER_S, self._filler)
-        filler.daemon = True
-        filler.start()
+        timer = threading.Timer(_FILLER_AFTER_S, self._filler)
+        timer.daemon = True
+        if filler:  # with the live lane the talker already said "on it"
+            timer.start()
         try:
             outcome = run_message_and_wait(conv_id, prompt, mode, timeout_sec=_TIMEOUT_S, cancel_on_timeout=False)
         finally:
-            filler.cancel()
+            timer.cancel()
         if gen != self.hush_gen:  # told to stop while thinking: say nothing, keep the chat
             return
         status = str(outcome.get("status") or "")
@@ -514,7 +594,8 @@ class _Session:
         if not reply:
             return
         self.say_async(f"🦆 **{self.name}:** {reply[:1900]}")
-        self.speak(spoken_text(reply), gen)
+        self.recent.append(("assistant", reply[:600]))
+        self.speak(speech_for(reply), gen)
 
     def say_async(self, text: str) -> None:
         """Text posts never hold up the voice (each REST call is ~200 ms)."""

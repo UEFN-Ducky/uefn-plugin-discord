@@ -40,6 +40,9 @@ and merges only after the owner presses Allow (`gh pr merge --match-head-commit`
   `%LOCALAPPDATA%\UEFN-Ducky\discord_voice` (needs Python 3.11+, 1-3 min).
 - Or use Discord's **Invite to Voice** on the bot like on a person: an allow-listed sender's voice
   invite (DM'd to the bot) makes it join that channel. Anyone else's invite is ignored.
+- **Talker + thinker:** every sentence goes to Ducky's live voice lane first (the fast voice
+  model, Settings → LLMs → Voice), which answers at once. Real work is handed to the ducky's agent
+  in the background; BoB keeps talking meanwhile and speaks a short summary when it's done.
 - **Wake word:** in a call BoB answers only when called — "hey bob, …" — then keeps listening to
   that speaker for 20 s. `!bob wake <word>` changes it (comma-separate several), `!bob wake off`
   answers everything.

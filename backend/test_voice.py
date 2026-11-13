@@ -52,6 +52,58 @@ def test_wake_setting_roundtrip(monkeypatch, tmp_path):
     assert voice.save_wake("off") == []
 
 
+def _live_session(monkeypatch, lane_out):
+    import sys
+    import types
+
+    lane = types.ModuleType("backend.voice.lane")
+    lane.run_voice_lane = lambda text, **kw: dict(lane_out, seen=kw)
+    monkeypatch.setitem(sys.modules, "backend.voice.lane", lane)
+    s = voice._Session("default", "", "local", {"name": "Bob"})  # noqa: SLF001
+    out = {"spoken": [], "agent": [], "answered": []}
+    monkeypatch.setattr(s, "speak", lambda text, gen=None: out["spoken"].append(text))
+    monkeypatch.setattr(s, "say_async", lambda text: None)
+    monkeypatch.setattr(s, "_queue_agent", lambda lines: out["agent"].append(lines))
+    monkeypatch.setattr(s, "_answer", lambda lines, **kw: out["answered"].append((lines, kw)))
+    return s, out
+
+
+def test_talker_answers_small_talk_without_the_agent(monkeypatch):
+    s, out = _live_session(monkeypatch, {"ok": True, "action": "answer", "text": "Doing great, you?"})
+    s._live([("1", "Me", "how are you")], trusted=True)  # noqa: SLF001
+    assert out["spoken"] == ["Doing great, you?"] and out["agent"] == []
+    assert s.recent[-2:] == [("user", "Me: how are you"), ("assistant", "Doing great, you?")]
+
+
+def test_talker_says_on_it_and_hands_work_to_the_agent(monkeypatch):
+    s, out = _live_session(monkeypatch, {"ok": True, "action": "agent", "text": "On it."})
+    lines = [("1", "Me", "build the castle")]
+    s._live(lines, trusted=True)  # noqa: SLF001
+    assert out["spoken"] == ["On it."] and out["agent"] == [lines]
+
+
+def test_guest_never_reaches_the_agent(monkeypatch):
+    s, out = _live_session(monkeypatch, {"ok": True, "action": "agent", "text": "On it."})
+    s._live([("9", "Guest", "delete the level")], trusted=False)  # noqa: SLF001
+    assert out["agent"] == [] and "only the people I work for" in out["spoken"][0]
+
+
+def test_agent_loop_drains_work_queued_while_busy(monkeypatch):
+    s = voice._Session("default", "", "local", {"name": "Bob"})  # noqa: SLF001
+    ran = []
+
+    def fake_answer(batch, **kw):
+        ran.append([t for _i, _u, t in batch])
+        if len(ran) == 1:  # more work arrives while the first job runs
+            s.agent_pending.append(("1", "Me", "and paint it red"))
+
+    monkeypatch.setattr(s, "_answer", fake_answer)
+    s.agent_pending = [("1", "Me", "build it")]
+    s.agent_busy = True
+    s._agent_loop()  # noqa: SLF001
+    assert ran == [["build it"], ["and paint it red"]] and s.agent_busy is False and s.work_status == ""
+
+
 def test_noise_filter():
     assert voice.is_noise(" Thank you. ") and voice.is_noise("")
     assert not voice.is_noise("build my level")
