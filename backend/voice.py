@@ -250,6 +250,7 @@ class _Session:
         self.state = "joining"
         self.hush_gen = 0  # bumped by hush(): answers and speech started before it are dropped
         self.awake_until: dict[str, float] = {}  # speaker id -> talking with BoB until (monotonic)
+        self.wake_hinted: set[str] = set()  # speakers already told about the wake word
 
     # -- messaging --
     def say(self, text: str) -> None:
@@ -397,8 +398,14 @@ class _Session:
                     continue
                 uid = str(ev.get("user_id") or "")
                 got = heard_for_bob(text, wake, self.awake_until.get(uid, 0.0) > now)
-                if got is None:
-                    continue  # people talking to each other, not to BoB
+                if got is None:  # people talking to each other, not to BoB
+                    if uid not in self.wake_hinted:  # once per person, so "nothing happens" never stays a mystery
+                        self.wake_hinted.add(uid)
+                        self.say_async(
+                            f"🎙️ Heard “{text[:80]}” — start with **“hey {wake[0]}”** to talk to me "
+                            "(`!bob wake off` to answer everything)."
+                        )
+                    continue
                 self.awake_until[uid] = now + _AWAKE_S
                 if got:
                     lines.append((uid, str(ev.get("user") or "someone"), got))

@@ -41,7 +41,60 @@ _MIN_UTTER_S = 0.5
 _MAX_UTTER_S = 30.0
 
 logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
+log = logging.getLogger("bob")  # worker-<bot>.log: what BoB heard and when
+log.setLevel(logging.INFO)
 _out_lock = threading.Lock()
+
+
+# --- DAVE speaker fix -------------------------------------------------------------------
+# DAVE (Discord's E2EE) decrypts each packet with the *speaker's* key. voice-recv only knows
+# the speaker after Discord's SPEAKING event, which often never comes under DAVE; then every
+# packet fails to decrypt and reaches the sink as empty audio, so BoB heard pure silence.
+# Work the speaker out before decrypting: the only person in the call, else whose key opens it.
+from discord.ext.voice_recv import opus as _vr_opus  # noqa: E402
+
+
+def people_in_call(vc) -> list[int]:
+    me = vc.user.id if getattr(vc, "user", None) else 0
+    return [uid for uid in (getattr(vc.channel, "voice_states", None) or {}) if uid != me]
+
+
+def who_is_speaking(vc, packet) -> int:
+    people = people_in_call(vc)
+    if len(people) == 1:
+        return people[0]
+    ds = getattr(getattr(vc, "_connection", None), "dave_session", None)
+    data = getattr(packet, "decrypted_data", None)
+    if not people or ds is None or not getattr(ds, "ready", False) or not data or packet.is_silence():
+        return 0
+    from davey import MediaType
+
+    for uid in people:
+        try:
+            ds.decrypt(uid, MediaType.audio, bytes(data))  # trial only; the real decrypt runs next
+            return uid
+        except Exception:
+            continue
+    return 0
+
+
+_orig_process_packet = _vr_opus.PacketDecoder._process_packet
+
+
+def _process_packet(self, packet):
+    try:
+        if self._cached_id is None and self.vc._get_id_from_ssrc(self.ssrc) is None:
+            uid = who_is_speaking(self.vc, packet)
+            if uid:
+                self.vc._add_ssrc(uid, self.ssrc)
+                self._cached_id = uid
+                log.info("matched ssrc %s to user %s without SPEAKING", self.ssrc, uid)
+    except Exception:
+        log.exception("speaker guess failed")
+    return _orig_process_packet(self, packet)
+
+
+_vr_opus.PacketDecoder._process_packet = _process_packet
 
 
 def emit(**ev) -> None:
@@ -71,6 +124,8 @@ class Ears(voice_recv.AudioSink):
         self.bufs: dict[int, bytearray] = {}
         self.last: dict[int, float] = {}
         self.names: dict[int, str] = {}
+        self.heard: set[int] = set()
+        self.dropped = 0
 
     def wants_opus(self) -> bool:
         return False
@@ -78,14 +133,25 @@ class Ears(voice_recv.AudioSink):
     def write(self, user, data) -> None:  # router thread
         uid = getattr(user, "id", None) or self.worker.only_human()
         if not uid or not data.pcm:
+            self.dropped += 1
+            if self.dropped in (50, 500, 5000):  # audio arrives but can't be used: say so in the log
+                log.warning("dropped %s audio packets (no speaker / empty after decrypt)", self.dropped)
             return
         if self.worker.playing():
             self.worker.barge_in()  # you talk over BoB → he stops
+        first = False
         with self.lock:
             self.bufs.setdefault(uid, bytearray()).extend(data.pcm)
             self.last[uid] = time.monotonic()
             if user is not None:
                 self.names[uid] = getattr(user, "display_name", None) or str(user)
+            if uid not in self.heard:
+                self.heard.add(uid)
+                first = True
+        if first:
+            name = self.names.get(uid, "you")
+            log.info("first audio from %s (%s)", name, uid)
+            emit(ev="notice", text=f"👂 I can hear **{name}**.")
 
     def cleanup(self) -> None:
         with self.lock:
@@ -233,6 +299,8 @@ class Worker:
                         _unlink(path)
                         emit(ev="error", error=f"couldn't transcribe: {e}")
                         continue
+                log.info("utterance from %s: %.1f s%s", name, len(pcm) / _BYTES_PER_S,
+                         f", heard {text!r}" if text is not None else "")
                 emit(ev="utterance", user_id=str(uid), user=name, wav=path, text=text)
 
     def _local_stt(self, path: str) -> str:
