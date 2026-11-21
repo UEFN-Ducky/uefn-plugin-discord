@@ -315,6 +315,7 @@
   var lastId = "";
   var pollTimer = null;
   var membersTimer = null;
+  var tabHidden = false;
   var sending = false;
   var seenIds = Object.create(null);
   var viewMsgs = [];
@@ -497,7 +498,7 @@
     stopPoll();
     if (!channelId || !botId) return;
     pollTimer = window.setInterval(function () {
-      pollNew();
+      if (!tabHidden) pollNew();
     }, POLL_MS);
   }
 
@@ -801,7 +802,7 @@
   function startMembersPoll() {
     stopMembersPoll();
     membersTimer = window.setInterval(function () {
-      loadMembers(true);
+      if (!tabHidden) loadMembers(true);
     }, MEMBERS_POLL_MS);
   }
 
@@ -948,7 +949,21 @@
   pullTheme();
   loadBots();
   pollVoice();
-  window.setInterval(pollVoice, POLL_MS);
+  window.setInterval(function () {
+    if (!tabHidden) pollVoice();
+  }, POLL_MS);
+  // The tab stays loaded while another one is in front (Ducky sends panel.visibility): the polls
+  // wait until it is shown again, then catch up at once. Hidden, about 39 calls a minute went out
+  // to Discord for a chat nobody was looking at.
+  window.addEventListener("message", function (ev) {
+    var e = ev.data && ev.data.channel === CHANNEL ? ev.data.event : null;
+    if (!e || e.type !== "panel.visibility") return;
+    tabHidden = !e.visible;
+    if (e.visible) {
+      pollNew();
+      pollVoice();
+    }
+  });
 })();
 </script>
 </body>
