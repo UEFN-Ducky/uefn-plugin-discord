@@ -3,6 +3,8 @@
 
 ``--compiled`` builds through the UEFN Ducky build engine instead: the backend becomes a
 Windows extension module (no Python source ships). release.py uses it for the Store.
+``--target linux-x86_64|linux-arm64`` is the compiled build on that Linux host (Nuitka can't
+cross-compile); the engine tags ``python_abi`` in the manifest and the zip name carries the target.
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "deploy"
 
 
-def _prune_superseded_zips(keep: pathlib.Path | None = None) -> None:
+def _prune_superseded_zips(keep: pathlib.Path | None = None, pattern: str = "*.ducky-plugin.zip") -> None:
     """Delete every built zip except the one just built.
 
     deploy/ is gitignored build output; superseded zips are stale files that
@@ -27,7 +29,7 @@ def _prune_superseded_zips(keep: pathlib.Path | None = None) -> None:
     script. Keeping them only invites installing an old build by mistake.
     """
     try:
-        zips = sorted(OUT_DIR.glob("*.ducky-plugin.zip"))
+        zips = sorted(OUT_DIR.glob(pattern))
     except OSError:
         return
     survivor = keep
@@ -101,12 +103,24 @@ def _find_ducky_repo() -> Path:
     )
 
 
-def _ducky_python(repo: Path) -> str:
-    venv = repo / ".venv" / "Scripts" / "python.exe"
+TARGETS = ("linux-x86_64", "linux-arm64")
+
+
+def _host_target() -> str:
+    """'linux-x86_64' / 'linux-arm64' on a Linux host, '' elsewhere (Windows builds stay untagged)."""
+    import platform
+
+    arch = platform.machine().lower()
+    arch = {"amd64": "x86_64", "aarch64": "arm64"}.get(arch, arch)
+    return f"linux-{arch}" if sys.platform.startswith("linux") else ""
+
+
+def _ducky_python(repo: Path, target: str = "") -> str:
+    venv = repo / ".venv" / "bin" / "python" if target else repo / ".venv" / "Scripts" / "python.exe"
     return str(venv) if venv.is_file() else sys.executable
 
 
-def build_compiled_zip(*, out: Path | None = None, release: bool = False) -> Path:
+def build_compiled_zip(*, out: Path | None = None, release: bool = False, target: str = "") -> Path:
     """Build a compiled Store zip by invoking the Ducky build engine CLI.
 
     ``release`` bakes the Store license check in (with the Store's signing key), so a
@@ -117,8 +131,14 @@ def build_compiled_zip(*, out: Path | None = None, release: bool = False) -> Pat
     version = manifest.get("version") or 1
     if not pid:
         raise SystemExit("plugin.json missing id")
+    host = _host_target()
+    target = target or host
+    if target and target != host:
+        raise SystemExit(f"--target {target} builds on a {target} machine (Nuitka can't cross-compile); "
+                         f"this host is {host or sys.platform}")
+    tag = f"-{target}" if target else ""
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    dest = out or (OUT_DIR / f"{pid}-{version}-compiled.ducky-plugin.zip")
+    dest = out or (OUT_DIR / f"{pid}-{version}{tag}-compiled.ducky-plugin.zip")
     repo = _find_ducky_repo()
     ducky_app = repo / "ducky_app"
     env = dict(os.environ)
@@ -126,13 +146,13 @@ def build_compiled_zip(*, out: Path | None = None, release: bool = False) -> Pat
     # One C compiler per core ran an agent terminal out of memory (LLVM ERROR: out of memory):
     # two at a time in Nuitka's low-memory mode fits; DUCKY_NUITKA_JOBS overrides.
     env.setdefault("DUCKY_NUITKA_JOBS", "2")
-    cmd = [_ducky_python(repo), "-m", "backend.uefn_plugins.compile", str(ROOT), str(dest)]
+    cmd = [_ducky_python(repo, target), "-m", "backend.uefn_plugins.compile", str(ROOT), str(dest)]
     if release:
         cmd.append("--release")
     print(f"compiling via {repo}")
     subprocess.run(cmd, cwd=str(ducky_app), env=env, check=True)
     print(f"wrote {dest} ({dest.stat().st_size} bytes)")
-    _prune_superseded_zips(dest)
+    _prune_superseded_zips(dest, f"*{tag}-compiled.ducky-plugin.zip" if target else "*.ducky-plugin.zip")
     return dest
 
 
@@ -145,8 +165,10 @@ if __name__ == "__main__":
         action="store_true",
         help="compile the backend to a .pyd via the Ducky build engine (no Python source ships)",
     )
+    ap.add_argument("--target", choices=TARGETS, default="",
+                    help="Linux compiled build for this host's CPU (implies --compiled)")
     args = ap.parse_args()
-    if args.compiled:
-        build_compiled_zip()
+    if args.compiled or args.target:
+        build_compiled_zip(target=args.target)
     else:
         _prune_superseded_zips(build_zip())
