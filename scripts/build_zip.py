@@ -3,7 +3,7 @@
 
 ``--compiled`` builds through the UEFN Ducky build engine instead: the backend becomes a
 Windows extension module (no Python source ships). release.py uses it for the Store.
-``--target linux-x86_64|linux-arm64`` is the compiled build on that Linux host (Nuitka can't
+``--target linux-x86_64|linux-arm64|macos-arm64|macos-x64`` is the compiled build on that host (Nuitka can't
 cross-compile); the engine tags ``python_abi`` in the manifest and the zip name carries the target.
 """
 
@@ -103,16 +103,21 @@ def _find_ducky_repo() -> Path:
     )
 
 
-TARGETS = ("linux-x86_64", "linux-arm64")
+TARGETS = ("linux-x86_64", "linux-arm64", "macos-arm64", "macos-x64")
 
 
 def _host_target() -> str:
-    """'linux-x86_64' / 'linux-arm64' on a Linux host, '' elsewhere (Windows builds stay untagged)."""
+    """'linux-x86_64' / 'linux-arm64' on Linux, 'macos-arm64' / 'macos-x64' on a Mac, '' elsewhere
+    (Windows builds stay untagged)."""
     import platform
 
     arch = platform.machine().lower()
     arch = {"amd64": "x86_64", "aarch64": "arm64"}.get(arch, arch)
-    return f"linux-{arch}" if sys.platform.startswith("linux") else ""
+    if sys.platform.startswith("linux"):
+        return f"linux-{arch}"
+    if sys.platform == "darwin":
+        return "macos-" + {"x86_64": "x64"}.get(arch, arch)
+    return ""
 
 
 def _ducky_python(repo: Path, target: str = "") -> str:
