@@ -5,6 +5,16 @@ from __future__ import annotations
 from . import commands, voice
 
 
+def test_mac_voice_venv_and_launcher(tmp_path, monkeypatch):
+    import sys
+
+    monkeypatch.setattr(sys, "platform", "darwin")
+    assert voice.venv_python(tmp_path) == tmp_path / "venv" / "bin" / "python"
+    assert all(c[0].startswith("python3") for c in voice._launchers())
+    monkeypatch.setattr(sys, "platform", "win32")
+    assert voice.venv_python(tmp_path).name == "python.exe"
+
+
 def test_parse_join_args():
     assert voice.parse_join_args("openai verse coder") == ("openai", "verse coder")
     assert voice.parse_join_args("LOCAL") == ("local", "")

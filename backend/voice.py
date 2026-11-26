@@ -27,6 +27,7 @@ import queue
 import random
 import re
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -207,21 +208,34 @@ def _openai_key() -> str:
 # ---------------------------------------------------------------- venv + worker
 
 
+def venv_python(base: Path) -> Path:
+    if sys.platform == "win32":
+        return base / "venv" / "Scripts" / "python.exe"
+    return base / "venv" / "bin" / "python"
+
+
+def _launchers() -> list[list[str]]:
+    if sys.platform == "win32":
+        return [["py", "-3.12"], ["py", "-3.11"], ["py", "-3.13"], ["py", "-3"], ["python"]]
+    return [["python3.12"], ["python3.11"], ["python3.13"], ["python3"]]
+
+
 def _launcher() -> list[str]:
-    for cmd in (["py", "-3.12"], ["py", "-3.11"], ["py", "-3.13"], ["py", "-3"], ["python"]):
+    for cmd in _launchers():
         try:
             r = subprocess.run(cmd + ["--version"], capture_output=True, timeout=15, creationflags=_NO_WINDOW)
             if r.returncode == 0:
                 return cmd
         except (OSError, subprocess.SubprocessError):
             continue
-    raise RuntimeError("Python 3.11+ is needed for voice — install it from python.org (tick 'py launcher').")
+    raise RuntimeError("Python 3.11+ is needed for voice — install it from python.org"
+                       + (" (tick 'py launcher')." if sys.platform == "win32" else " or with 'brew install python@3.12'."))
 
 
 def ensure_env(engine: str, say: Any) -> Path:
     """The worker venv with the voice packages; installs on first use (or a new engine)."""
     base = _base()
-    py = base / "venv" / "Scripts" / "python.exe"
+    py = venv_python(base)
     reqs = (_VOICE_DIR / "requirements.txt").read_text(encoding="utf-8")
     if engine == "local":
         reqs += _LOCAL_EXTRA
